@@ -108,7 +108,7 @@ python scripts/run_collector.py
 
 ### 제거된 파일들
 - `data_collector.py`: 구버전 수집기 (새로운 collector들로 대체)
-- `test_collect_data.db`: 테스트용 데이터베이스
+- `data/collect_data.db`: 메인 데이터베이스
 
 ### 이동된 파일들
 - 수집기들: `collectors/` 디렉토리로 이동

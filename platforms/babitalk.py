@@ -4,6 +4,13 @@ import json
 from typing import List, Dict, Optional
 from dataclasses import dataclass
 from datetime import datetime, timedelta
+import sys
+import os
+
+# 프로젝트 루트 디렉토리를 Python 경로에 추가 (직접 실행 시)
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+from utils.logger import LoggedClass
 
 @dataclass
 class BabitalkUser:
@@ -128,8 +135,9 @@ class BabitalkComment:
 class BabitalkCommentPagination:
     has_next: bool
 
-class BabitalkAPI:
+class BabitalkAPI(LoggedClass):
     def __init__(self):
+        super().__init__("BabitalkAPI")
         self.base_url = "https://web-api.babitalk.com"
         self.headers = {
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36",
@@ -198,10 +206,10 @@ class BabitalkAPI:
                     return reviews, pagination
                     
         except Exception as e:
-            print(f"❌ 시술 후기 수집 실패: {e}")
-            print(f"🔍 에러 타입: {type(e).__name__}")
+            self.log_error(f"❌ 시술 후기 수집 실패: {e}")
+            self.log_error(f"🔍 에러 타입: {type(e).__name__}")
             import traceback
-            print(f"📋 상세 에러: {traceback.format_exc()}")
+            self.log_error(f"📋 상세 에러: {traceback.format_exc()}")
             return [], BabitalkPagination(has_next=False, search_after=None)
     
     async def get_reviews_by_date(self, target_date: str, limit: int = 24) -> List[BabitalkReview]:
@@ -265,7 +273,7 @@ class BabitalkAPI:
             return all_reviews
             
         except Exception as e:
-            print(f"❌ 날짜별 후기 수집 중 오류 발생: {e}")
+            self.log_error(f"❌ 날짜별 후기 수집 중 오류 발생: {e}")
             return all_reviews
     
     # 카테고리별 발품후기 수집을 위한 카테고리 정보
@@ -344,10 +352,10 @@ class BabitalkAPI:
                     return memos, pagination
                     
         except Exception as e:
-            print(f"❌ 발품후기 수집 실패: {e}")
-            print(f"🔍 에러 타입: {type(e).__name__}")
+            self.log_error(f"❌ 발품후기 수집 실패: {e}")
+            self.log_error(f"🔍 에러 타입: {type(e).__name__}")
             import traceback
-            print(f"📋 상세 에러: {traceback.format_exc()}")
+            self.log_error(f"📋 상세 에러: {traceback.format_exc()}")
             return [], BabitalkEventAskMemoPagination(has_next=False, search_after=None)
     
     async def get_event_ask_memos_by_date(self, target_date: str, category_id: int, limit: int = 24) -> List[BabitalkEventAskMemo]:
@@ -412,7 +420,7 @@ class BabitalkAPI:
             return all_memos
             
         except Exception as e:
-            print(f"❌ 날짜별 발품후기 수집 중 오류 발생: {e}")
+            self.log_error(f"❌ 날짜별 발품후기 수집 중 오류 발생: {e}")
             return all_memos
     
     def _parse_review(self, data: Dict) -> BabitalkReview:
@@ -626,10 +634,10 @@ class BabitalkAPI:
                     return talks, pagination
                     
         except Exception as e:
-            print(f"❌ 자유톡 수집 실패: {e}")
-            print(f"🔍 에러 타입: {type(e).__name__}")
+            self.log_error(f"❌ 자유톡 수집 실패: {e}")
+            self.log_error(f"🔍 에러 타입: {type(e).__name__}")
             import traceback
-            print(f"📋 상세 에러: {traceback.format_exc()}")
+            self.log_error(f"📋 상세 에러: {traceback.format_exc()}")
             return [], BabitalkTalkPagination(has_next=False, search_after=None)
 
     async def get_talks_by_date(self, target_date: str, service_id: int, limit: int = 24) -> List[BabitalkTalk]:
@@ -695,7 +703,7 @@ class BabitalkAPI:
             return all_talks
             
         except Exception as e:
-            print(f"❌ 날짜별 자유톡 수집 중 오류 발생: {e}")
+            self.log_error(f"❌ 날짜별 자유톡 수집 중 오류 발생: {e}")
             return all_talks
 
     def _parse_talk(self, data: Dict) -> BabitalkTalk:
@@ -797,10 +805,10 @@ class BabitalkAPI:
                     return comments, pagination
                     
         except Exception as e:
-            print(f"❌ 댓글 수집 실패: {e}")
-            print(f"🔍 에러 타입: {type(e).__name__}")
+            self.log_error(f"❌ 댓글 수집 실패: {e}")
+            self.log_error(f"🔍 에러 타입: {type(e).__name__}")
             import traceback
-            print(f"📋 상세 에러: {traceback.format_exc()}")
+            self.log_error(f"📋 상세 에러: {traceback.format_exc()}")
             return [], BabitalkCommentPagination(has_next=False)
 
     def _parse_comment(self, data: Dict) -> BabitalkComment:
@@ -840,106 +848,109 @@ class BabitalkAPI:
 # 테스트 함수
 async def test_babitalk_api():
     """바비톡 API 테스트 함수"""
-    print("🧪 바비톡 API 테스트 시작")
-    print("=" * 50)
+    from utils.logger import get_logger
+    logger = get_logger("BABITALK_TEST")
+    
+    logger.info("🧪 바비톡 API 테스트 시작")
+    logger.info("=" * 50)
     
     api = BabitalkAPI()
     
     try:
         # 자유톡 API 테스트 (성형 카테고리)
-        print("💬 자유톡 API 테스트 (성형 카테고리)")
+        logger.info("💬 자유톡 API 테스트 (성형 카테고리)")
         talks, pagination = await api.get_talks(service_id=79, limit=5)
         
-        print(f"\n📊 자유톡 테스트 결과:")
-        print(f"   수집된 자유톡: {len(talks)}개")
-        print(f"   다음 페이지 존재: {pagination.has_next}")
-        print(f"   다음 페이지 커서: {pagination.search_after}")
+        logger.info(f"\n📊 자유톡 테스트 결과:")
+        logger.info(f"   수집된 자유톡: {len(talks)}개")
+        logger.info(f"   다음 페이지 존재: {pagination.has_next}")
+        logger.info(f"   다음 페이지 커서: {pagination.search_after}")
         
         if talks:
-            print(f"\n📝 첫 번째 자유톡 상세 정보:")
+            logger.info(f"\n📝 첫 번째 자유톡 상세 정보:")
             first_talk = talks[0]
-            print(f"   ID: {first_talk.id}")
-            print(f"   제목: {first_talk.title}")
-            print(f"   작성자: {first_talk.user.name}")
-            print(f"   서비스 ID: {first_talk.service_id}")
-            print(f"   댓글 수: {first_talk.total_comment}")
-            print(f"   베스트 여부: {first_talk.is_best}")
-            print(f"   작성일: {first_talk.created_at}")
-            print(f"   내용 미리보기: {first_talk.text[:100]}...")
+            logger.info(f"   ID: {first_talk.id}")
+            logger.info(f"   제목: {first_talk.title}")
+            logger.info(f"   작성자: {first_talk.user.name}")
+            logger.info(f"   서비스 ID: {first_talk.service_id}")
+            logger.info(f"   댓글 수: {first_talk.total_comment}")
+            logger.info(f"   베스트 여부: {first_talk.is_best}")
+            logger.info(f"   작성일: {first_talk.created_at}")
+            logger.info(f"   내용 미리보기: {first_talk.text[:100]}...")
         
         # 발품후기 API 테스트 (눈 카테고리)
-        print("\n👁️ 발품후기 API 테스트 (눈 카테고리)")
+        logger.info("\n👁️ 발품후기 API 테스트 (눈 카테고리)")
         memos, pagination = await api.get_event_ask_memos(category_id=3000, limit=5)
         
-        print(f"\n📊 발품후기 테스트 결과:")
-        print(f"   수집된 발품후기: {len(memos)}개")
-        print(f"   다음 페이지 존재: {pagination.has_next}")
-        print(f"   다음 페이지 커서: {pagination.search_after}")
+        logger.info(f"\n📊 발품후기 테스트 결과:")
+        logger.info(f"   수집된 발품후기: {len(memos)}개")
+        logger.info(f"   다음 페이지 존재: {pagination.has_next}")
+        logger.info(f"   다음 페이지 커서: {pagination.search_after}")
         
         if memos:
-            print(f"\n📝 첫 번째 발품후기 상세 정보:")
+            logger.info(f"\n📝 첫 번째 발품후기 상세 정보:")
             first_memo = memos[0]
-            print(f"   ID: {first_memo.id}")
-            print(f"   작성자: {first_memo.user.name}")
-            print(f"   카테고리: {first_memo.category}")
-            print(f"   지역: {first_memo.region}")
-            print(f"   병원명: {first_memo.hospital_name}")
-            print(f"   평점: {first_memo.star_score}/5")
-            print(f"   가격: {first_memo.real_price:,}원")
-            print(f"   작성시간: {first_memo.first_write_at}")
-            print(f"   내용 미리보기: {first_memo.text[:100]}...")
+            logger.info(f"   ID: {first_memo.id}")
+            logger.info(f"   작성자: {first_memo.user.name}")
+            logger.info(f"   카테고리: {first_memo.category}")
+            logger.info(f"   지역: {first_memo.region}")
+            logger.info(f"   병원명: {first_memo.hospital_name}")
+            logger.info(f"   평점: {first_memo.star_score}/5")
+            logger.info(f"   가격: {first_memo.real_price:,}원")
+            logger.info(f"   작성시간: {first_memo.first_write_at}")
+            logger.info(f"   내용 미리보기: {first_memo.text[:100]}...")
         
         # 기존 시술후기 테스트도 유지
-        print(f"\n📅 시술후기 API 테스트")
+        logger.info(f"\n📅 시술후기 API 테스트")
         from datetime import datetime
         today = datetime.now().strftime("%Y-%m-%d")
-        print(f"📅 오늘 날짜({today}) 시술후기 수집 테스트")
+        logger.info(f"📅 오늘 날짜({today}) 시술후기 수집 테스트")
         
         reviews = await api.get_reviews_by_date(today, limit=3)
         
-        print(f"📊 시술후기 테스트 결과:")
-        print(f"   수집된 시술후기: {len(reviews)}개")
+        logger.info(f"📊 시술후기 테스트 결과:")
+        logger.info(f"   수집된 시술후기: {len(reviews)}개")
         
         if reviews:
-            print(f"\n📝 첫 번째 시술후기 상세 정보:")
+            logger.info(f"\n📝 첫 번째 시술후기 상세 정보:")
             first_review = reviews[0]
-            print(f"   ID: {first_review.id}")
-            print(f"   작성자: {first_review.user.name}")
-            print(f"   카테고리: {', '.join(first_review.categories)}")
-            print(f"   평점: {first_review.rating}/5")
-            print(f"   가격: {first_review.price:,}원")
-            print(f"   작성일: {first_review.created_at}")
+            logger.info(f"   ID: {first_review.id}")
+            logger.info(f"   작성자: {first_review.user.name}")
+            logger.info(f"   카테고리: {', '.join(first_review.categories)}")
+            logger.info(f"   평점: {first_review.rating}/5")
+            logger.info(f"   가격: {first_review.price:,}원")
+            logger.info(f"   작성일: {first_review.created_at}")
         
         # 댓글 수집 테스트
-        print(f"\n💬 댓글 수집 테스트")
+        logger.info(f"\n💬 댓글 수집 테스트")
         if talks:
             test_talk_id = talks[0].id
-            print(f"📝 자유톡 ID {test_talk_id}의 댓글 수집 테스트")
+            logger.info(f"📝 자유톡 ID {test_talk_id}의 댓글 수집 테스트")
             
             comments, pagination = await api.get_comments(talk_id=test_talk_id, page=1)
             
-            print(f"\n📊 댓글 테스트 결과:")
-            print(f"   수집된 댓글: {len(comments)}개")
-            print(f"   다음 페이지 존재: {pagination.has_next}")
+            logger.info(f"\n📊 댓글 테스트 결과:")
+            logger.info(f"   수집된 댓글: {len(comments)}개")
+            logger.info(f"   다음 페이지 존재: {pagination.has_next}")
             
             if comments:
-                print(f"\n📝 첫 번째 댓글 상세 정보:")
+                logger.info(f"\n📝 첫 번째 댓글 상세 정보:")
                 first_comment = comments[0]
-                print(f"   ID: {first_comment.id}")
-                print(f"   작성자: {first_comment.user.name}")
-                print(f"   부모 댓글 ID: {first_comment.parent_id}")
-                print(f"   부모 댓글 여부: {first_comment.is_parent}")
-                print(f"   삭제 여부: {first_comment.is_del}")
-                print(f"   작성일: {first_comment.created_at}")
-                print(f"   내용 미리보기: {first_comment.text[:100]}...")
+                logger.info(f"   ID: {first_comment.user.name}")
+                logger.info(f"   작성자: {first_comment.user.name}")
+                logger.info(f"   부모 댓글 ID: {first_comment.parent_id}")
+                logger.info(f"   부모 댓글 여부: {first_comment.is_parent}")
+                logger.info(f"   삭제 여부: {first_comment.is_del}")
+                logger.info(f"   작성일: {first_comment.created_at}")
+                logger.info(f"   내용 미리보기: {first_comment.text[:100]}...")
         
     except Exception as e:
-        print(f"❌ 테스트 중 오류 발생: {e}")
+        logger.error(f"❌ 테스트 중 오류 발생: {e}")
         import traceback
-        print(f"📋 상세 오류: {traceback.format_exc()}")
+        logger.error(f"📋 상세 오류: {traceback.format_exc()}")
     
-    print("=" * 50)
-    print("🧪 바비톡 API 테스트 완료")
+    logger.info("=" * 50)
+    logger.info("🧪 바비톡 API 테스트 완료")
 
 if __name__ == "__main__":
     asyncio.run(test_babitalk_api())

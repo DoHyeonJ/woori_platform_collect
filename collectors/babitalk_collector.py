@@ -8,9 +8,11 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from platforms.babitalk import BabitalkAPI, BabitalkReview, BabitalkEventAskMemo, BabitalkTalk, BabitalkComment
 from database.models import DatabaseManager, Review, Community, Article
+from utils.logger import LoggedClass
 
-class BabitalkDataCollector:
+class BabitalkDataCollector(LoggedClass):
     def __init__(self, db_path: str = "data/collect_data.db"):
+        super().__init__("BabitalkCollector")
         self.api = BabitalkAPI()
         self.db = DatabaseManager(db_path)
     
@@ -25,7 +27,7 @@ class BabitalkDataCollector:
         Returns:
             int: 수집된 후기 수
         """
-        print("🚀 바비톡 시술 후기 수집 시작")
+        self.log_info("🚀 바비톡 시술 후기 수집 시작")
         
         # 바비톡 커뮤니티 생성 또는 조회
         babitalk_community = await self._get_or_create_babitalk_community()
@@ -66,11 +68,11 @@ class BabitalkDataCollector:
                 # 페이지 간 딜레이 (서버 부하 방지)
                 await asyncio.sleep(1)
             
-            print(f"✅ 바비톡 시술 후기 수집 완료: {total_reviews}개")
+            self.log_info(f"✅ 바비톡 시술 후기 수집 완료: {total_reviews}개")
             return total_reviews
             
         except Exception as e:
-            print(f"❌ 수집 중 오류 발생: {e}")
+            self.log_error(f"❌ 수집 중 오류 발생: {e}")
             return total_reviews
     
     async def collect_reviews_by_date(self, target_date: str, limit_per_page: int = 24) -> int:
@@ -84,8 +86,8 @@ class BabitalkDataCollector:
         Returns:
             int: 수집된 후기 수
         """
-        print(f"🚀 {target_date} 날짜 바비톡 시술 후기 수집 시작")
-        print("=" * 50)
+        self.log_info(f"🚀 {target_date} 날짜 바비톡 시술 후기 수집 시작")
+        self.log_info("=" * 50)
         
         # 바비톡 커뮤니티 생성 또는 조회
         babitalk_community = await self._get_or_create_babitalk_community()
@@ -95,10 +97,10 @@ class BabitalkDataCollector:
             reviews = await self.api.get_reviews_by_date(target_date, limit_per_page)
             
             if not reviews:
-                print(f"📭 {target_date} 날짜에 수집할 후기가 없습니다.")
+                self.log_info(f"📭 {target_date} 날짜에 수집할 후기가 없습니다.")
                 return 0
             
-            print(f"📋 {target_date} 날짜: {len(reviews)}개 후기 수집됨")
+            self.log_info(f"📋 {target_date} 날짜: {len(reviews)}개 후기 수집됨")
             
             # 각 후기 처리 및 저장
             total_reviews = 0
@@ -111,11 +113,11 @@ class BabitalkDataCollector:
                 except Exception:
                     continue
             
-            print(f"✅ {target_date} 날짜 후기 수집 완료: {total_reviews}개")
+            self.log_info(f"✅ {target_date} 날짜 후기 수집 완료: {total_reviews}개")
             return total_reviews
             
         except Exception as e:
-            print(f"❌ 날짜별 후기 수집 중 오류 발생: {e}")
+            self.log_error(f"❌ 날짜별 후기 수집 중 오류 발생: {e}")
             return 0
     
     async def collect_event_ask_memos_by_date(self, target_date: str, category_id: int, limit_per_page: int = 24) -> int:
@@ -131,7 +133,7 @@ class BabitalkDataCollector:
             int: 수집된 발품후기 수
         """
         category_name = self.api.EVENT_ASK_CATEGORIES.get(category_id, f"카테고리{category_id}")
-        print(f"📅 {target_date} 날짜 바비톡 {category_name} 발품후기 수집 시작")
+        self.log_info(f"📅 {target_date} 날짜 바비톡 {category_name} 발품후기 수집 시작")
         
         # 바비톡 커뮤니티 생성 또는 조회
         babitalk_community = await self._get_or_create_babitalk_community()
@@ -141,7 +143,7 @@ class BabitalkDataCollector:
             memos = await self.api.get_event_ask_memos_by_date(target_date, category_id, limit_per_page)
             
             if not memos:
-                print(f"📭 {target_date} 날짜에 수집할 {category_name} 발품후기가 없습니다.")
+                self.log_info(f"📭 {target_date} 날짜에 수집할 {category_name} 발품후기가 없습니다.")
                 return 0
             
             # 각 발품후기 처리 및 저장
@@ -155,11 +157,11 @@ class BabitalkDataCollector:
                 except Exception:
                     continue
             
-            print(f"✅ {target_date} 날짜 {category_name} 발품후기 수집 완료: {total_memos}개")
+            self.log_info(f"✅ {target_date} 날짜 {category_name} 발품후기 수집 완료: {total_memos}개")
             return total_memos
             
         except Exception as e:
-            print(f"❌ 날짜별 발품후기 수집 중 오류 발생: {e}")
+            self.log_error(f"❌ 날짜별 발품후기 수집 중 오류 발생: {e}")
             return 0
     
     async def collect_all_event_ask_memos_by_date(self, target_date: str, limit_per_page: int = 24) -> Dict[int, int]:
@@ -173,7 +175,7 @@ class BabitalkDataCollector:
         Returns:
             Dict[int, int]: 카테고리별 수집된 발품후기 수
         """
-        print(f"📅 {target_date} 날짜 바비톡 모든 카테고리 발품후기 수집 시작")
+        self.log_info(f"📅 {target_date} 날짜 바비톡 모든 카테고리 발품후기 수집 시작")
         
         results = {}
         
@@ -187,12 +189,12 @@ class BabitalkDataCollector:
                 await asyncio.sleep(2)
                 
             except Exception as e:
-                print(f"❌ {category_name} 카테고리 수집 실패: {e}")
+                self.log_error(f"❌ {category_name} 카테고리 수집 실패: {e}")
                 results[category_id] = 0
         
         # 전체 결과 요약
         total_memos = sum(results.values())
-        print(f"✅ 모든 카테고리 발품후기 수집 완료: {total_memos}개")
+        self.log_info(f"✅ 모든 카테고리 발품후기 수집 완료: {total_memos}개")
         
         return results
     
@@ -208,7 +210,7 @@ class BabitalkDataCollector:
         Returns:
             int: 수집된 자유톡 수
         """
-        print(f"📅 {target_date} 날짜 바비톡 자유톡 수집 시작 (서비스 ID: {service_id})")
+        self.log_info(f"📅 {target_date} 날짜 바비톡 자유톡 수집 시작 (서비스 ID: {service_id})")
         
         # 바비톡 커뮤니티 생성 또는 조회
         babitalk_community = await self._get_or_create_babitalk_community()
@@ -218,7 +220,7 @@ class BabitalkDataCollector:
             talks = await self.api.get_talks_by_date(target_date, service_id, limit_per_page)
             
             if not talks:
-                print(f"📭 {target_date} 날짜의 자유톡이 없습니다.")
+                self.log_info(f"📭 {target_date} 날짜의 자유톡이 없습니다.")
                 return 0
             
             # 각 자유톡 처리
@@ -232,11 +234,11 @@ class BabitalkDataCollector:
                 except Exception:
                     continue
             
-            print(f"✅ {target_date} 날짜 자유톡 수집 완료: {total_talks}개")
+            self.log_info(f"✅ {target_date} 날짜 자유톡 수집 완료: {total_talks}개")
             return total_talks
             
         except Exception as e:
-            print(f"❌ 자유톡 수집 중 오류 발생: {e}")
+            self.log_error(f"❌ 자유톡 수집 중 오류 발생: {e}")
             return 0
     
     async def collect_all_talks_by_date(self, target_date: str, limit_per_page: int = 24) -> Dict[int, int]:
@@ -250,7 +252,7 @@ class BabitalkDataCollector:
         Returns:
             Dict[int, int]: 카테고리별 수집된 자유톡 수
         """
-        print(f"📅 {target_date} 날짜 바비톡 모든 자유톡 카테고리 수집 시작")
+        self.log_info(f"📅 {target_date} 날짜 바비톡 모든 자유톡 카테고리 수집 시작")
         
         results = {}
         
@@ -446,7 +448,8 @@ class BabitalkDataCollector:
                 is_blind=review.is_blind,
                 is_image_blur=review.is_image_blur,
                 is_certificated_review=review.is_certificated_review,
-                created_at=created_at
+                created_at=created_at,
+                collected_at=datetime.now()  # 수집 시간 기록
             )
             
             review_id = self.db.insert_review(db_review)
@@ -496,7 +499,8 @@ class BabitalkDataCollector:
                 is_blind=False,  # 발품후기에는 블라인드 정보가 없음
                 is_image_blur=False,  # 발품후기에는 이미지 블러 정보가 없음
                 is_certificated_review=False,  # 발품후기에는 인증 후기 정보가 없음
-                created_at=created_at
+                created_at=created_at,
+                collected_at=datetime.now()  # 수집 시간 기록
             )
             
             memo_id = self.db.insert_review(db_memo)
@@ -544,7 +548,8 @@ class BabitalkDataCollector:
                 view_count=0,  # 바비톡 API에는 조회수가 없음
                 images=images_json,
                 created_at=created_at,
-                category_name=service_category
+                category_name=service_category,
+                collected_at=datetime.now()  # 수집 시간 기록
             )
             
             article_id = self.db.insert_article(db_article)
@@ -580,7 +585,8 @@ class BabitalkDataCollector:
                     writer_nickname=comment.user.name,
                     writer_id=str(comment.user.id),
                     created_at=created_at,
-                    parent_comment_id=comment.parent_id if not comment.is_parent else None
+                    parent_comment_id=comment.parent_id if not comment.is_parent else None,
+                    collected_at=datetime.now()  # 수집 시간 기록
                 )
                 
                 self.db.insert_comment(db_comment)

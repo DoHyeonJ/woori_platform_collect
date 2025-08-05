@@ -5,6 +5,13 @@ import re
 from typing import List, Dict, Optional
 from dataclasses import dataclass
 from datetime import datetime, date
+import sys
+import os
+
+# 프로젝트 루트 디렉토리를 Python 경로에 추가 (직접 실행 시)
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+from utils.logger import LoggedClass
 
 @dataclass
 class Writer:
@@ -61,8 +68,9 @@ class Article:
     has_subscribed: bool = False
     comments: List[Comment] = None
 
-class GangnamUnniAPI:
+class GangnamUnniAPI(LoggedClass):
     def __init__(self):
+        super().__init__("GangnamUnniAPI")
         self.base_url = "https://www.gangnamunni.com"
         self.headers = {
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36",
@@ -119,7 +127,9 @@ class GangnamUnniAPI:
                 }
                 
                 async with session.get(url, params=params) as response:
-                    if response.status != 200:
+                    if response.status == 404:
+                        raise Exception(f"404 Not Found: 게시글을 찾을 수 없습니다")
+                    elif response.status != 200:
                         raise Exception(f"HTTP {response.status}: {response.reason}")
                     
                     json_data = await response.json()
@@ -139,7 +149,7 @@ class GangnamUnniAPI:
                     return articles
                     
         except Exception as e:
-            print(f"게시글 목록 가져오기 실패: {e}")
+            self.log_error(f"게시글 목록 가져오기 실패: {e}")
             # API 실패 시 빈 리스트 반환
             return []
     
@@ -158,7 +168,7 @@ class GangnamUnniAPI:
             # 날짜 형식 검증
             target_date_obj = datetime.strptime(target_date, "%Y-%m-%d").date()
         except ValueError:
-            print(f"잘못된 날짜 형식입니다. YYYY-MM-DD 형식으로 입력해주세요. (예: 2024-01-15)")
+            self.log_error(f"잘못된 날짜 형식입니다. YYYY-MM-DD 형식으로 입력해주세요. (예: 2024-01-15)")
             return []
         
         all_articles = []
@@ -248,23 +258,27 @@ class GangnamUnniAPI:
         Returns:
             List[Comment]: 댓글 목록
         """
-        print(f"        🔍 댓글 수집 시작: 게시글 ID {article_id}")
+        self.log_info(f"        🔍 댓글 수집 시작: 게시글 ID {article_id}")
         try:
             async with aiohttp.ClientSession(headers=self.headers) as session:
                 # 게시글 상세 페이지 URL
                 url = f"{self.base_url}/community/{article_id}"
-                print(f"        📡 페이지 URL: {url}")
+                self.log_info(f"        📡 페이지 URL: {url}")
                 
                 async with session.get(url) as response:
-                    print(f"        📊 HTTP 상태: {response.status}")
+                    self.log_info(f"        📊 HTTP 상태: {response.status}")
                     
-                    if response.status != 200:
+                    if response.status == 404:
+                        error_msg = f"404 Not Found: 게시글 ID {article_id}를 찾을 수 없습니다"
+                        self.log_error(f"        ❌ HTTP 오류: {error_msg}")
+                        raise Exception(error_msg)
+                    elif response.status != 200:
                         error_msg = f"HTTP {response.status}: {response.reason}"
-                        print(f"        ❌ HTTP 오류: {error_msg}")
+                        self.log_error(f"        ❌ HTTP 오류: {error_msg}")
                         raise Exception(error_msg)
                     
                     html_content = await response.text()
-                    print(f"        📄 HTML 크기: {len(html_content)} bytes")
+                    self.log_info(f"        📄 HTML 크기: {len(html_content)} bytes")
                     
                     # __NEXT_DATA__ 스크립트에서 댓글 데이터 추출
                     import re
@@ -275,36 +289,36 @@ class GangnamUnniAPI:
                     match = re.search(next_data_pattern, html_content, re.DOTALL)
                     
                     if not match:
-                        print(f"        ❌ __NEXT_DATA__ 스크립트를 찾을 수 없습니다.")
+                        self.log_error(f"        ❌ __NEXT_DATA__ 스크립트를 찾을 수 없습니다.")
                         return []
                     
                     try:
                         next_data = json.loads(match.group(1))
-                        print(f"        ✅ __NEXT_DATA__ 파싱 성공")
+                        self.log_info(f"        ✅ __NEXT_DATA__ 파싱 성공")
                         
                         # 댓글 데이터 추출
                         comments_data = next_data.get("props", {}).get("pageProps", {}).get("communityDocumentComments", [])
-                        print(f"        📋 원본 댓글 데이터: {len(comments_data)}개")
+                        self.log_info(f"        📋 원본 댓글 데이터: {len(comments_data)}개")
                         
                         comments = []
                         for i, comment_data in enumerate(comments_data):
                             try:
                                 comment = self._parse_comment_from_ssr(comment_data)
                                 comments.append(comment)
-                                print(f"        ✅ 댓글 {i+1} 파싱 성공: ID {comment.id}, 작성자 {comment.writer.nickname}")
+                                self.log_info(f"        ✅ 댓글 {i+1} 파싱 성공: ID {comment.id}, 작성자 {comment.writer.nickname}")
                             except Exception as parse_error:
-                                print(f"        ⚠️  댓글 {i+1} 파싱 실패: {parse_error}")
+                                self.log_warning(f"        ⚠️  댓글 {i+1} 파싱 실패: {parse_error}")
                         
-                        print(f"        🎉 총 {len(comments)}개 댓글 파싱 완료")
+                        self.log_info(f"        🎉 총 {len(comments)}개 댓글 파싱 완료")
                         return comments
                         
                     except json.JSONDecodeError as e:
-                        print(f"        ❌ JSON 파싱 실패: {e}")
+                        self.log_error(f"        ❌ JSON 파싱 실패: {e}")
                         return []
                     
         except Exception as e:
-            print(f"        ❌ 댓글 수집 실패: {e}")
-            print(f"        🔍 에러 타입: {type(e).__name__}")
+            self.log_error(f"        ❌ 댓글 수집 실패: {e}")
+            self.log_error(f"        🔍 에러 타입: {type(e).__name__}")
             # 오류가 발생해도 빈 리스트 반환 (pass 처리)
             return []
     
@@ -461,7 +475,7 @@ class GangnamUnniAPI:
             replies = []
             replies_data = data.get("replies", [])
             if replies_data:
-                print(f"          🔄 대댓글 {len(replies_data)}개 파싱 중...")
+                self.log_info(f"          🔄 대댓글 {len(replies_data)}개 파싱 중...")
                 for reply_data in replies_data:
                     reply = self._parse_comment_from_ssr(reply_data)
                     replies.append(reply)
@@ -489,8 +503,8 @@ class GangnamUnniAPI:
             return comment
             
         except Exception as e:
-            print(f"          ❌ 댓글 파싱 실패: {e}")
-            print(f"          📋 원본 데이터: {data}")
+            self.log_error(f"          ❌ 댓글 파싱 실패: {e}")
+            self.log_error(f"          📋 원본 데이터: {data}")
             raise e
     
     def _parse_comment_from_api(self, data: Dict) -> Comment:
@@ -525,7 +539,7 @@ class GangnamUnniAPI:
             replies = []
             replies_data = data.get("replies", [])
             if replies_data:
-                print(f"          🔄 대댓글 {len(replies_data)}개 파싱 중...")
+                self.log_info(f"          🔄 대댓글 {len(replies_data)}개 파싱 중...")
                 for reply_data in replies_data:
                     reply = self._parse_comment_from_api(reply_data)
                     replies.append(reply)
@@ -553,8 +567,8 @@ class GangnamUnniAPI:
             return comment
             
         except Exception as e:
-            print(f"          ❌ 댓글 파싱 실패: {e}")
-            print(f"          📋 원본 데이터: {data}")
+            self.log_error(f"          ❌ 댓글 파싱 실패: {e}")
+            self.log_error(f"          📋 원본 데이터: {data}")
             raise e
     
     async def search_articles(self, keyword: str, category: str = "hospital_question") -> List[Article]:
@@ -582,77 +596,80 @@ class GangnamUnniAPI:
             return filtered_articles
             
         except Exception as e:
-            print(f"게시글 검색 실패: {e}")
+            self.log_error(f"게시글 검색 실패: {e}")
             return []
 
 # 테스트 함수
 async def test_gannamunni_api():
     """강남언니 API 테스트 함수"""
-    print("🧪 강남언니 API 테스트 시작")
-    print("=" * 50)
+    from utils.logger import get_logger
+    logger = get_logger("GANNAMUNNI_TEST")
+    
+    logger.info("🧪 강남언니 API 테스트 시작")
+    logger.info("=" * 50)
     
     api = GangnamUnniAPI()
     
     try:
         # 게시글 목록 테스트
-        print("📝 게시글 목록 테스트")
+        logger.info("📝 게시글 목록 테스트")
         articles = await api.get_article_list(category="hospital_question", page=1, limit=5)
         
-        print(f"\n📊 게시글 목록 테스트 결과:")
-        print(f"   수집된 게시글: {len(articles)}개")
+        logger.info(f"\n📊 게시글 목록 테스트 결과:")
+        logger.info(f"   수집된 게시글: {len(articles)}개")
         
         if articles:
-            print(f"\n📝 첫 번째 게시글 상세 정보:")
+            logger.info(f"\n📝 첫 번째 게시글 상세 정보:")
             first_article = articles[0]
-            print(f"   ID: {first_article.id}")
-            print(f"   작성자: {first_article.writer.nickname}")
-            print(f"   카테고리: {first_article.category_name}")
-            print(f"   조회수: {first_article.view_count}")
-            print(f"   댓글 수: {first_article.comment_count}")
-            print(f"   작성시간: {first_article.create_time}")
-            print(f"   내용 미리보기: {first_article.contents[:100]}...")
+            logger.info(f"   ID: {first_article.id}")
+            logger.info(f"   작성자: {first_article.writer.nickname}")
+            logger.info(f"   카테고리: {first_article.category_name}")
+            logger.info(f"   조회수: {first_article.view_count}")
+            logger.info(f"   댓글 수: {first_article.comment_count}")
+            logger.info(f"   작성시간: {first_article.create_time}")
+            logger.info(f"   내용 미리보기: {first_article.contents[:100]}...")
         
         # 날짜별 게시글 테스트
-        print(f"\n📅 날짜별 게시글 테스트")
+        logger.info(f"\n📅 날짜별 게시글 테스트")
         from datetime import datetime
         today = datetime.now().strftime("%Y-%m-%d")
-        print(f"📅 오늘 날짜({today}) 게시글 수집 테스트")
+        logger.info(f"📅 오늘 날짜({today}) 게시글 수집 테스트")
         
         date_articles = await api.get_articles_by_date(today, category="hospital_question")
         
-        print(f"📊 날짜별 게시글 테스트 결과:")
-        print(f"   수집된 게시글: {len(date_articles)}개")
+        logger.info(f"📊 날짜별 게시글 테스트 결과:")
+        logger.info(f"   수집된 게시글: {len(date_articles)}개")
         
         if date_articles:
-            print(f"\n📝 첫 번째 날짜별 게시글 상세 정보:")
+            logger.info(f"\n📝 첫 번째 날짜별 게시글 상세 정보:")
             first_date_article = date_articles[0]
-            print(f"   ID: {first_date_article.id}")
-            print(f"   작성자: {first_date_article.writer.nickname}")
-            print(f"   내용 미리보기: {first_date_article.contents[:100]}...")
+            logger.info(f"   ID: {first_date_article.id}")
+            logger.info(f"   작성자: {first_date_article.writer.nickname}")
+            logger.info(f"   내용 미리보기: {first_date_article.contents[:100]}...")
         
         # 댓글 테스트 (게시글이 있는 경우에만)
         if articles and articles[0].comment_count > 0:
-            print(f"\n💬 댓글 테스트")
+            logger.info(f"\n💬 댓글 테스트")
             comments = await api.get_comments(articles[0].id)
             
-            print(f"📊 댓글 테스트 결과:")
-            print(f"   수집된 댓글: {len(comments)}개")
+            logger.info(f"📊 댓글 테스트 결과:")
+            logger.info(f"   수집된 댓글: {len(comments)}개")
             
             if comments:
-                print(f"\n📝 첫 번째 댓글 상세 정보:")
+                logger.info(f"\n📝 첫 번째 댓글 상세 정보:")
                 first_comment = comments[0]
-                print(f"   ID: {first_comment.id}")
-                print(f"   작성자: {first_comment.writer.nickname}")
-                print(f"   내용: {first_comment.contents}")
-                print(f"   작성시간: {first_comment.create_time}")
+                logger.info(f"   ID: {first_comment.id}")
+                logger.info(f"   작성자: {first_comment.writer.nickname}")
+                logger.info(f"   내용: {first_comment.contents}")
+                logger.info(f"   작성시간: {first_comment.create_time}")
         
     except Exception as e:
-        print(f"❌ 테스트 중 오류 발생: {e}")
+        logger.error(f"❌ 테스트 중 오류 발생: {e}")
         import traceback
-        print(f"📋 상세 오류: {traceback.format_exc()}")
+        logger.error(f"📋 상세 오류: {traceback.format_exc()}")
     
-    print("=" * 50)
-    print("🧪 강남언니 API 테스트 완료")
+    logger.info("=" * 50)
+    logger.info("🧪 강남언니 API 테스트 완료")
 
 if __name__ == "__main__":
     asyncio.run(test_gannamunni_api())

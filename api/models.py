@@ -129,26 +129,6 @@ class CommentResponse(BaseModel):
     like_count: int
     created_at: datetime
 
-class StatisticsResponse(BaseModel):
-    """통계 응답 모델"""
-    total_communities: int
-    total_articles: int
-    total_reviews: int
-    total_comments: int
-    platform_statistics: Dict[str, Dict[str, int]]
-    review_statistics: Dict[str, int]
-    timestamp: datetime
-
-class PaginatedResponse(BaseModel):
-    """페이지네이션 응답 모델"""
-    data: List[Any]
-    total: int
-    page: int
-    limit: int
-    total_pages: int
-    has_next: bool
-    has_prev: bool
-
 class HealthResponse(BaseModel):
     """헬스 체크 응답 모델"""
     status: str
@@ -159,4 +139,14 @@ class ErrorResponse(BaseModel):
     """에러 응답 모델"""
     error: str
     message: str
-    timestamp: datetime 
+    timestamp: datetime
+
+class PaginatedResponse(BaseModel):
+    """페이지네이션 응답 모델"""
+    data: List[Any]
+    total: int
+    page: int
+    limit: int
+    total_pages: int
+    has_next: bool
+    has_prev: bool 

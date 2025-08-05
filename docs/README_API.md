@@ -130,7 +130,7 @@ GET /api/v1/statistics/trends?days=7
 | `API_PORT` | `8000` | 서버 포트 |
 | `API_RELOAD` | `true` | 자동 재시작 여부 |
 | `API_LOG_LEVEL` | `info` | 로그 레벨 |
-| `DB_PATH` | `test_collect_data.db` | 데이터베이스 파일 경로 |
+| `DB_PATH` | `data/collect_data.db` | 데이터베이스 파일 경로 |
 
 ## 📋 지원하는 플랫폼 및 카테고리
 

@@ -33,6 +33,7 @@ class Article:
     view_count: int
     created_at: datetime
     category_name: str
+    collected_at: Optional[datetime] = None  # 수집 시간
 
 @dataclass
 class Comment:
@@ -43,6 +44,7 @@ class Comment:
     writer_id: str
     created_at: datetime
     parent_comment_id: Optional[int] = None  # 대댓글인 경우 부모 댓글 ID
+    collected_at: Optional[datetime] = None  # 수집 시간
 
 @dataclass
 class ExcludedArticle:
@@ -74,9 +76,10 @@ class Review:
     is_image_blur: bool  # 이미지 블러 여부 (바비톡용)
     is_certificated_review: bool  # 인증 후기 여부 (바비톡용)
     created_at: datetime
+    collected_at: Optional[datetime] = None  # 수집 시간
 
 class DatabaseManager:
-    def __init__(self, db_path: str = "test_collect_data.db"):
+    def __init__(self, db_path: str = "data/collect_data.db"):
         self.db_path = db_path
         self.init_database()
     
@@ -122,6 +125,7 @@ class DatabaseManager:
                     view_count INTEGER DEFAULT 0,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     category_name TEXT,
+                    collected_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,  -- 수집 시간
                     FOREIGN KEY (community_id) REFERENCES communities (id),
                     UNIQUE(platform_id, community_article_id)
                 )
@@ -137,6 +141,7 @@ class DatabaseManager:
                     writer_id TEXT NOT NULL,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     parent_comment_id INTEGER,
+                    collected_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,  -- 수집 시간
                     FOREIGN KEY (article_id) REFERENCES articles (id),
                     FOREIGN KEY (parent_comment_id) REFERENCES comments (id)
                 )
@@ -178,6 +183,7 @@ class DatabaseManager:
                     is_image_blur BOOLEAN DEFAULT FALSE,  -- 이미지 블러 여부 (바비톡용)
                     is_certificated_review BOOLEAN DEFAULT FALSE,  -- 인증 후기 여부 (바비톡용)
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    collected_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,  -- 수집 시간
                     FOREIGN KEY (community_id) REFERENCES communities (id),
                     UNIQUE(platform_id, platform_review_id)
                 )
@@ -231,14 +237,15 @@ class DatabaseManager:
                     INSERT INTO articles (
                         platform_id, community_article_id, community_id, title, content,
                         images, writer_nickname, writer_id, like_count, comment_count,
-                        view_count, created_at, category_name
+                        view_count, created_at, category_name, collected_at
                     )
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ''', (
                     article.platform_id, article.community_article_id, article.community_id,
                     article.title, article.content, article.images, article.writer_nickname,
                     article.writer_id, article.like_count, article.comment_count,
-                    article.view_count, article.created_at, article.category_name
+                    article.view_count, article.created_at, article.category_name, 
+                    article.collected_at or datetime.now()
                 ))
                 return cursor.lastrowid
             except sqlite3.IntegrityError:
@@ -255,11 +262,12 @@ class DatabaseManager:
         with sqlite3.connect(self.db_path) as conn:
             cursor = conn.cursor()
             cursor.execute('''
-                INSERT INTO comments (article_id, content, writer_nickname, writer_id, created_at, parent_comment_id)
-                VALUES (?, ?, ?, ?, ?, ?)
+                INSERT INTO comments (article_id, content, writer_nickname, writer_id, created_at, parent_comment_id, collected_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
             ''', (
                 comment.article_id, comment.content, comment.writer_nickname,
-                comment.writer_id, comment.created_at, comment.parent_comment_id
+                comment.writer_id, comment.created_at, comment.parent_comment_id, 
+                comment.collected_at or datetime.now()
             ))
             return cursor.lastrowid
     
@@ -350,15 +358,16 @@ class DatabaseManager:
                         platform_id, platform_review_id, community_id, title, content,
                         images, writer_nickname, writer_id, like_count, rating,
                         price, categories, sub_categories, surgery_date, hospital_name,
-                        doctor_name, is_blind, is_image_blur, is_certificated_review, created_at
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        doctor_name, is_blind, is_image_blur, is_certificated_review, created_at, collected_at
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ''', (
                     review.platform_id, review.platform_review_id, review.community_id,
                     review.title, review.content, review.images, review.writer_nickname,
                     review.writer_id, review.like_count, review.rating, review.price,
                     review.categories, review.sub_categories, review.surgery_date,
                     review.hospital_name, review.doctor_name, review.is_blind, 
-                    review.is_image_blur, review.is_certificated_review, review.created_at
+                    review.is_image_blur, review.is_certificated_review, review.created_at, 
+                    review.collected_at or datetime.now()
                 ))
                 return cursor.lastrowid
             except sqlite3.IntegrityError:
