@@ -111,6 +111,23 @@ class BabitalkTalkPagination:
     has_next: bool
     search_after: Optional[int]
 
+@dataclass
+class BabitalkComment:
+    id: int
+    parent_id: int
+    is_parent: bool
+    user: BabitalkUser
+    to_name: Optional[str]
+    is_del: int
+    blind_at: Optional[str]
+    blind_type: Optional[str]
+    text: str
+    created_at: str
+
+@dataclass
+class BabitalkCommentPagination:
+    has_next: bool
+
 class BabitalkAPI:
     def __init__(self):
         self.base_url = "https://web-api.babitalk.com"
@@ -731,6 +748,95 @@ class BabitalkAPI:
         
         return talk
 
+    async def get_comments(self, talk_id: int, page: int = 1) -> tuple[List[BabitalkComment], BabitalkCommentPagination]:
+        """
+        특정 자유톡의 댓글을 가져옵니다.
+        
+        Args:
+            talk_id: 자유톡 ID
+            page: 페이지 번호 (기본값: 1)
+        
+        Returns:
+            tuple[List[BabitalkComment], BabitalkCommentPagination]: 댓글 목록과 페이지네이션 정보
+        """
+        try:
+            async with aiohttp.ClientSession(headers=self.headers) as session:
+                # API 엔드포인트
+                url = f"{self.base_url}/v1/community/talks/{talk_id}/comments"
+                
+                # 파라미터 구성
+                params = {
+                    "page": page
+                }
+                
+                async with session.get(url, params=params) as response:
+                    if response.status != 200:
+                        error_msg = f"HTTP {response.status}: {response.reason}"
+                        raise Exception(error_msg)
+                    
+                    json_data = await response.json()
+                    
+                    # 데이터 파싱
+                    comments_data = json_data.get("data", [])
+                    pagination_data = json_data.get("pagination", {})
+                    
+                    # 댓글 객체 생성
+                    comments = []
+                    for comment_data in comments_data:
+                        try:
+                            comment = self._parse_comment(comment_data)
+                            comments.append(comment)
+                        except Exception:
+                            continue
+                    
+                    # 페이지네이션 객체 생성
+                    pagination = BabitalkCommentPagination(
+                        has_next=pagination_data.get("has_next", False)
+                    )
+                    
+                    return comments, pagination
+                    
+        except Exception as e:
+            print(f"❌ 댓글 수집 실패: {e}")
+            print(f"🔍 에러 타입: {type(e).__name__}")
+            import traceback
+            print(f"📋 상세 에러: {traceback.format_exc()}")
+            return [], BabitalkCommentPagination(has_next=False)
+
+    def _parse_comment(self, data: Dict) -> BabitalkComment:
+        """
+        댓글 API 응답 데이터를 BabitalkComment 객체로 파싱합니다.
+        
+        Args:
+            data: API 응답의 댓글 데이터
+        
+        Returns:
+            BabitalkComment: 파싱된 댓글 객체
+        """
+        # 사용자 정보 파싱
+        user_data = data.get("user", {})
+        user = BabitalkUser(
+            id=user_data.get("id", 0),
+            name=user_data.get("name", ""),
+            profile=user_data.get("profile")
+        )
+        
+        # 댓글 객체 생성
+        comment = BabitalkComment(
+            id=data.get("id", 0),
+            parent_id=data.get("parent_id", 0),
+            is_parent=data.get("is_parent", False),
+            user=user,
+            to_name=data.get("to_name"),
+            is_del=data.get("is_del", 0),
+            blind_at=data.get("blind_at"),
+            blind_type=data.get("blind_type"),
+            text=data.get("text", ""),
+            created_at=data.get("created_at", "")
+        )
+        
+        return comment
+
 # 테스트 함수
 async def test_babitalk_api():
     """바비톡 API 테스트 함수"""
@@ -803,6 +909,29 @@ async def test_babitalk_api():
             print(f"   평점: {first_review.rating}/5")
             print(f"   가격: {first_review.price:,}원")
             print(f"   작성일: {first_review.created_at}")
+        
+        # 댓글 수집 테스트
+        print(f"\n💬 댓글 수집 테스트")
+        if talks:
+            test_talk_id = talks[0].id
+            print(f"📝 자유톡 ID {test_talk_id}의 댓글 수집 테스트")
+            
+            comments, pagination = await api.get_comments(talk_id=test_talk_id, page=1)
+            
+            print(f"\n📊 댓글 테스트 결과:")
+            print(f"   수집된 댓글: {len(comments)}개")
+            print(f"   다음 페이지 존재: {pagination.has_next}")
+            
+            if comments:
+                print(f"\n📝 첫 번째 댓글 상세 정보:")
+                first_comment = comments[0]
+                print(f"   ID: {first_comment.id}")
+                print(f"   작성자: {first_comment.user.name}")
+                print(f"   부모 댓글 ID: {first_comment.parent_id}")
+                print(f"   부모 댓글 여부: {first_comment.is_parent}")
+                print(f"   삭제 여부: {first_comment.is_del}")
+                print(f"   작성일: {first_comment.created_at}")
+                print(f"   내용 미리보기: {first_comment.text[:100]}...")
         
     except Exception as e:
         print(f"❌ 테스트 중 오류 발생: {e}")

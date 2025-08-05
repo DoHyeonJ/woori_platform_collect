@@ -312,4 +312,79 @@ async def get_collection_status():
             "babitalk": ["surgery_review", "event_ask_memo", "talk"]
         },
         "timestamp": datetime.now().isoformat()
-    } 
+    }
+
+@router.post("/collect/babitalk/comments")
+async def collect_babitalk_comments(
+    talk_id: int,
+    db: DatabaseManager = Depends(get_database_manager)
+):
+    """
+    특정 바비톡 자유톡의 댓글을 수집합니다.
+    """
+    start_time = time.time()
+    
+    try:
+        collector = BabitalkDataCollector(db.db_path)
+        
+        # 댓글 수집
+        result = await collector.collect_comments_for_talk(talk_id)
+        
+        execution_time = time.time() - start_time
+        
+        return {
+            "talk_id": talk_id,
+            "total_comments": result,
+            "execution_time": execution_time,
+            "status": "success",
+            "message": f"바비톡 자유톡 {talk_id} 댓글 수집 완료",
+            "timestamp": datetime.now().isoformat()
+        }
+        
+    except Exception as e:
+        execution_time = time.time() - start_time
+        raise HTTPException(
+            status_code=500,
+            detail=f"댓글 수집 실패: {str(e)}"
+        )
+
+@router.post("/collect/babitalk/comments/by-date")
+async def collect_babitalk_comments_by_date(
+    target_date: str,
+    service_id: int = 79,  # 기본값: 성형 카테고리
+    limit_per_page: int = 24,
+    db: DatabaseManager = Depends(get_database_manager)
+):
+    """
+    특정 날짜의 바비톡 자유톡들의 댓글을 수집합니다.
+    """
+    start_time = time.time()
+    
+    try:
+        collector = BabitalkDataCollector(db.db_path)
+        
+        # 댓글 수집
+        result = await collector.collect_comments_for_talks_by_date(
+            target_date=target_date,
+            service_id=service_id,
+            limit_per_page=limit_per_page
+        )
+        
+        execution_time = time.time() - start_time
+        
+        return {
+            "target_date": target_date,
+            "service_id": service_id,
+            "total_comments": result,
+            "execution_time": execution_time,
+            "status": "success",
+            "message": f"바비톡 {target_date} 날짜 자유톡 댓글 수집 완료",
+            "timestamp": datetime.now().isoformat()
+        }
+        
+    except Exception as e:
+        execution_time = time.time() - start_time
+        raise HTTPException(
+            status_code=500,
+            detail=f"댓글 수집 실패: {str(e)}"
+        ) 

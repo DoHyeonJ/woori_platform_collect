@@ -2,7 +2,11 @@ import asyncio
 import json
 from datetime import datetime
 from typing import List, Dict, Optional
-from platforms.babitalk import BabitalkAPI, BabitalkReview, BabitalkEventAskMemo, BabitalkTalk
+import sys
+import os
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+from platforms.babitalk import BabitalkAPI, BabitalkReview, BabitalkEventAskMemo, BabitalkTalk, BabitalkComment
 from database.models import DatabaseManager, Review, Community, Article
 
 class BabitalkDataCollector:
@@ -267,6 +271,101 @@ class BabitalkDataCollector:
         
         return results
     
+    async def collect_comments_for_talk(self, talk_id: int) -> int:
+        """
+        특정 자유톡의 댓글을 수집하고 데이터베이스에 저장합니다.
+        
+        Args:
+            talk_id: 자유톡 ID
+        
+        Returns:
+            int: 수집된 댓글 수
+        """
+        print(f"💬 자유톡 ID {talk_id} 댓글 수집 시작")
+        
+        try:
+            # 먼저 해당 자유톡이 데이터베이스에 있는지 확인
+            article = self.db.get_article_by_platform_id_and_community_article_id("babitalk_talk", talk_id)
+            
+            if not article:
+                print(f"⚠️  자유톡 ID {talk_id}가 데이터베이스에 없습니다. 먼저 자유톡을 수집해주세요.")
+                return 0
+            
+            # 페이지 1에서 댓글 수집
+            comments_page1, pagination = await self.api.get_comments(talk_id, page=1)
+            
+            if not comments_page1:
+                print(f"📭 자유톡 ID {talk_id}에 댓글이 없습니다.")
+                return 0
+            
+            total_comments = 0
+            
+            # 페이지 1 댓글 저장
+            saved_count = await self._save_comments(comments_page1, article['id'])
+            total_comments += saved_count
+            
+            # 댓글이 50개를 초과하는 경우 페이지 2도 수집
+            if len(comments_page1) >= 50 and pagination.has_next:
+                print(f"📄 댓글이 50개를 초과하여 페이지 2를 수집합니다.")
+                
+                # 페이지 2에서 댓글 수집
+                comments_page2, _ = await self.api.get_comments(talk_id, page=2)
+                
+                if comments_page2:
+                    saved_count = await self._save_comments(comments_page2, article['id'])
+                    total_comments += saved_count
+            
+            print(f"✅ 자유톡 ID {talk_id} 댓글 수집 완료: {total_comments}개")
+            return total_comments
+            
+        except Exception as e:
+            print(f"❌ 댓글 수집 중 오류 발생: {e}")
+            return 0
+    
+    async def collect_comments_for_talks_by_date(self, target_date: str, service_id: int, limit_per_page: int = 24) -> int:
+        """
+        특정 날짜의 자유톡들의 댓글을 수집하고 데이터베이스에 저장합니다.
+        
+        Args:
+            target_date: 수집할 날짜 (YYYY-MM-DD 형식)
+            service_id: 서비스 ID (79: 성형, 71: 쁘띠/피부, 72: 일상)
+            limit_per_page: 페이지당 게시글 수 (기본값: 24)
+        
+        Returns:
+            int: 수집된 댓글 수
+        """
+        print(f"💬 {target_date} 날짜 자유톡 댓글 수집 시작 (서비스 ID: {service_id})")
+        
+        try:
+            # 해당 날짜의 자유톡 데이터 가져오기
+            talks = await self.api.get_talks_by_date(target_date, service_id, limit_per_page)
+            
+            if not talks:
+                print(f"📭 {target_date} 날짜의 자유톡이 없습니다.")
+                return 0
+            
+            total_comments = 0
+            
+            # 각 자유톡의 댓글 수집
+            for talk in talks:
+                try:
+                    comments_count = await self.collect_comments_for_talk(talk.id)
+                    total_comments += comments_count
+                    
+                    # 자유톡 간 딜레이 (서버 부하 방지)
+                    await asyncio.sleep(1)
+                    
+                except Exception as e:
+                    print(f"⚠️  자유톡 ID {talk.id} 댓글 수집 실패: {e}")
+                    continue
+            
+            print(f"✅ {target_date} 날짜 자유톡 댓글 수집 완료: {total_comments}개")
+            return total_comments
+            
+        except Exception as e:
+            print(f"❌ 날짜별 댓글 수집 중 오류 발생: {e}")
+            return 0
+    
     async def _get_or_create_babitalk_community(self) -> Dict:
         """바비톡 커뮤니티 생성 또는 조회"""
         try:
@@ -455,6 +554,44 @@ class BabitalkDataCollector:
             print(f"    ⚠️  자유톡 저장 실패: {e}")
             return None
     
+    async def _save_comments(self, comments: List[BabitalkComment], article_id: int) -> int:
+        """댓글 정보를 데이터베이스에 저장"""
+        from database.models import Comment as DBComment
+        
+        saved_count = 0
+        
+        for comment in comments:
+            try:
+                # 삭제된 댓글이나 블라인드된 댓글은 건너뛰기
+                if comment.is_del == 1 or comment.blind_at:
+                    continue
+                
+                # 날짜 파싱
+                try:
+                    created_at = datetime.strptime(comment.created_at, "%Y-%m-%d %H:%M:%S")
+                except ValueError:
+                    created_at = datetime.now()
+                
+                # 댓글 저장
+                db_comment = DBComment(
+                    id=None,
+                    article_id=article_id,
+                    content=comment.text,
+                    writer_nickname=comment.user.name,
+                    writer_id=str(comment.user.id),
+                    created_at=created_at,
+                    parent_comment_id=comment.parent_id if not comment.is_parent else None
+                )
+                
+                self.db.insert_comment(db_comment)
+                saved_count += 1
+                
+            except Exception as e:
+                print(f"        ⚠️  댓글 저장 실패: {e}")
+                continue
+        
+        return saved_count
+    
     def get_statistics(self) -> Dict:
         """바비톡 데이터 통계 조회"""
         return self.db.get_review_statistics()
@@ -491,14 +628,26 @@ async def test_babitalk_collector():
         # 통계 조회
         stats = collector.get_statistics()
         print(f"\n📈 데이터베이스 통계:")
-        print(f"   전체 후기: {stats['total_reviews']}개")
-        print(f"   플랫폼별 후기: {stats['platform_stats']}")
-        print(f"   오늘 후기: {stats['today_reviews']}개")
-        if 'babitalk' in stats['platform_stats']:
-            print(f"   바비톡 시술후기: {stats['platform_stats']['babitalk']}개")
-        if 'babitalk_event_ask' in stats['platform_stats']:
-            print(f"   바비톡 발품후기: {stats['platform_stats']['babitalk_event_ask']}개")
-        print(f"   평점별 후기: {stats['rating_stats']}")
+        print(f"   전체 후기: {stats.get('total_reviews', 0)}개")
+        print(f"   플랫폼별 후기: {stats.get('platform_stats', {})}")
+        print(f"   오늘 후기: {stats.get('today_reviews', 0)}개")
+        platform_stats = stats.get('platform_stats', {})
+        if 'babitalk' in platform_stats:
+            print(f"   바비톡 시술후기: {platform_stats['babitalk']}개")
+        if 'babitalk_event_ask' in platform_stats:
+            print(f"   바비톡 발품후기: {platform_stats['babitalk_event_ask']}개")
+        print(f"   평점별 후기: {stats.get('rating_stats', {})}")
+        
+        # 댓글 수집 테스트
+        if talks_count > 0:
+            print(f"\n💬 댓글 수집 테스트")
+            print(f"📝 수집된 자유톡 중 첫 번째 자유톡의 댓글을 수집합니다.")
+            
+            # 첫 번째 자유톡의 댓글 수집 테스트
+            comments_count = await collector.collect_comments_for_talks_by_date(today, 79, limit_per_page=1)
+            
+            print(f"\n📊 댓글 테스트 결과:")
+            print(f"   수집된 댓글: {comments_count}개")
         
     except Exception as e:
         print(f"❌ 테스트 중 오류 발생: {e}")

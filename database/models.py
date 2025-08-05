@@ -651,6 +651,41 @@ class DatabaseManager:
                 )
             return None
     
+    def get_article_by_platform_id_and_community_article_id(self, platform_id: str, community_article_id: int) -> Optional[Dict]:
+        """플랫폼 ID와 커뮤니티 게시글 ID로 게시글 조회"""
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.cursor()
+            
+            cursor.execute('''
+                SELECT id, platform_id, community_article_id, community_id, title, content, 
+                       images, writer_nickname, writer_id, like_count, comment_count, 
+                       view_count, created_at, category_name
+                FROM articles 
+                WHERE platform_id = ? AND community_article_id = ?
+            ''', (platform_id, community_article_id))
+            
+            row = cursor.fetchone()
+            
+            if row:
+                return {
+                    'id': row[0],
+                    'platform_id': row[1],
+                    'community_article_id': row[2],
+                    'community_id': row[3],
+                    'title': row[4],
+                    'content': row[5],
+                    'images': row[6],
+                    'writer_nickname': row[7],
+                    'writer_id': row[8],
+                    'like_count': row[9],
+                    'comment_count': row[10],
+                    'view_count': row[11],
+                    'created_at': row[12],
+                    'category_name': row[13]
+                }
+            
+            return None
+    
     def get_review_by_id(self, review_id: int) -> Optional[Review]:
         """ID로 후기를 조회합니다."""
         with sqlite3.connect(self.db_path) as conn:
