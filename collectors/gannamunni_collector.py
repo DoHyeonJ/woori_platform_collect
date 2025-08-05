@@ -2,11 +2,11 @@ import asyncio
 import json
 from datetime import datetime
 from typing import List, Dict, Optional
-from gannamunni import GangnamUnniAPI, Article, Comment
+from platforms.gannamunni import GangnamUnniAPI, Article, Comment
 from database.models import DatabaseManager, Community, Article as DBArticle, Comment as DBComment
 
 class GangnamUnniDataCollector:
-    def __init__(self, db_path: str = "test_collect_data.db"):
+    def __init__(self, db_path: str = "data/collect_data.db"):
         self.api = GangnamUnniAPI()
         self.db = DatabaseManager(db_path)
     

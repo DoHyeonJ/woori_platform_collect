@@ -2,11 +2,11 @@ import asyncio
 import json
 from datetime import datetime
 from typing import List, Dict, Optional
-from babitalk import BabitalkAPI, BabitalkReview, BabitalkEventAskMemo, BabitalkTalk
+from platforms.babitalk import BabitalkAPI, BabitalkReview, BabitalkEventAskMemo, BabitalkTalk
 from database.models import DatabaseManager, Review, Community, Article
 
 class BabitalkDataCollector:
-    def __init__(self, db_path: str = "test_collect_data.db"):
+    def __init__(self, db_path: str = "data/collect_data.db"):
         self.api = BabitalkAPI()
         self.db = DatabaseManager(db_path)
     

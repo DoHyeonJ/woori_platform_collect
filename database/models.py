@@ -419,42 +419,364 @@ class DatabaseManager:
             return [dict(row) for row in cursor.fetchall()]
     
     def get_review_statistics(self) -> Dict:
-        """후기 통계 조회"""
+        """후기 통계 정보를 반환합니다."""
         with sqlite3.connect(self.db_path) as conn:
             cursor = conn.cursor()
             
-            # 전체 후기 수
-            cursor.execute('SELECT COUNT(*) FROM reviews')
-            total_reviews = cursor.fetchone()[0]
-            
             # 플랫폼별 후기 수
             cursor.execute('''
-                SELECT platform_id, COUNT(*) as count 
-                FROM reviews 
+                SELECT platform_id, COUNT(*) as count
+                FROM reviews
                 GROUP BY platform_id
             ''')
-            platform_stats = dict(cursor.fetchall())
+            platform_stats = {row[0]: row[1] for row in cursor.fetchall()}
             
-            # 최근 후기 수 (오늘)
+            # 카테고리별 후기 수 (바비톡)
             cursor.execute('''
-                SELECT COUNT(*) FROM reviews 
-                WHERE DATE(created_at) = DATE('now')
+                SELECT categories, COUNT(*) as count
+                FROM reviews
+                WHERE platform_id = 'babitalk'
+                GROUP BY categories
             ''')
-            today_reviews = cursor.fetchone()[0]
-            
-            # 평점별 후기 수 (바비톡용)
-            cursor.execute('''
-                SELECT rating, COUNT(*) as count 
-                FROM reviews 
-                WHERE platform_id = 'babitalk' AND rating > 0
-                GROUP BY rating
-                ORDER BY rating DESC
-            ''')
-            rating_stats = dict(cursor.fetchall())
+            category_stats = {row[0]: row[1] for row in cursor.fetchall()}
             
             return {
-                'total_reviews': total_reviews,
-                'platform_stats': platform_stats,
-                'today_reviews': today_reviews,
-                'rating_stats': rating_stats
-            } 
+                "platform_statistics": platform_stats,
+                "category_statistics": category_stats
+            }
+    
+    # API용 메서드들 추가
+    def get_articles_by_filters(self, filters: Dict, limit: int = 20, offset: int = 0) -> List[Article]:
+        """필터 조건에 따라 게시글을 조회합니다."""
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.cursor()
+            
+            query = "SELECT * FROM articles WHERE 1=1"
+            params = []
+            
+            if "platform_id" in filters:
+                query += " AND platform_id = ?"
+                params.append(filters["platform_id"])
+            
+            if "category_name" in filters:
+                query += " AND category_name = ?"
+                params.append(filters["category_name"])
+            
+            query += " ORDER BY created_at DESC LIMIT ? OFFSET ?"
+            params.extend([limit, offset])
+            
+            cursor.execute(query, params)
+            rows = cursor.fetchall()
+            
+            articles = []
+            for row in rows:
+                articles.append(Article(
+                    id=row[0],
+                    platform_id=row[1],
+                    community_article_id=row[2],
+                    community_id=row[3],
+                    title=row[4],
+                    content=row[5],
+                    images=row[6],
+                    writer_nickname=row[7],
+                    writer_id=row[8],
+                    like_count=row[9],
+                    comment_count=row[10],
+                    view_count=row[11],
+                    created_at=datetime.fromisoformat(row[12]),
+                    category_name=row[13]
+                ))
+            
+            return articles
+    
+    def get_articles_count_by_filters(self, filters: Dict) -> int:
+        """필터 조건에 따른 게시글 수를 반환합니다."""
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.cursor()
+            
+            query = "SELECT COUNT(*) FROM articles WHERE 1=1"
+            params = []
+            
+            if "platform_id" in filters:
+                query += " AND platform_id = ?"
+                params.append(filters["platform_id"])
+            
+            if "category_name" in filters:
+                query += " AND category_name = ?"
+                params.append(filters["category_name"])
+            
+            cursor.execute(query, params)
+            return cursor.fetchone()[0]
+    
+    def get_reviews_by_filters(self, filters: Dict, limit: int = 20, offset: int = 0) -> List[Review]:
+        """필터 조건에 따라 후기를 조회합니다."""
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.cursor()
+            
+            query = "SELECT * FROM reviews WHERE 1=1"
+            params = []
+            
+            if "platform_id" in filters:
+                query += " AND platform_id = ?"
+                params.append(filters["platform_id"])
+            
+            if "category_name" in filters:
+                query += " AND title LIKE ?"
+                params.append(f"%{filters['category_name']}%")
+            
+            query += " ORDER BY created_at DESC LIMIT ? OFFSET ?"
+            params.extend([limit, offset])
+            
+            cursor.execute(query, params)
+            rows = cursor.fetchall()
+            
+            reviews = []
+            for row in rows:
+                reviews.append(Review(
+                    id=row[0],
+                    platform_id=row[1],
+                    platform_review_id=row[2],
+                    community_id=row[3],
+                    title=row[4],
+                    content=row[5],
+                    images=row[6],
+                    writer_nickname=row[7],
+                    writer_id=row[8],
+                    like_count=row[9],
+                    rating=row[10],
+                    price=row[11],
+                    categories=row[12],
+                    sub_categories=row[13],
+                    surgery_date=row[14],
+                    hospital_name=row[15],
+                    doctor_name=row[16],
+                    is_blind=bool(row[17]),
+                    is_image_blur=bool(row[18]),
+                    is_certificated_review=bool(row[19]),
+                    created_at=datetime.fromisoformat(row[20])
+                ))
+            
+            return reviews
+    
+    def get_reviews_count_by_filters(self, filters: Dict) -> int:
+        """필터 조건에 따른 후기 수를 반환합니다."""
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.cursor()
+            
+            query = "SELECT COUNT(*) FROM reviews WHERE 1=1"
+            params = []
+            
+            if "platform_id" in filters:
+                query += " AND platform_id = ?"
+                params.append(filters["platform_id"])
+            
+            if "category_name" in filters:
+                query += " AND title LIKE ?"
+                params.append(f"%{filters['category_name']}%")
+            
+            cursor.execute(query, params)
+            return cursor.fetchone()[0]
+    
+    def get_comments_by_filters(self, filters: Dict, limit: int = 20, offset: int = 0) -> List[Comment]:
+        """필터 조건에 따라 댓글을 조회합니다."""
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.cursor()
+            
+            query = "SELECT * FROM comments WHERE 1=1"
+            params = []
+            
+            if "article_id" in filters:
+                query += " AND article_id = ?"
+                params.append(filters["article_id"])
+            
+            query += " ORDER BY created_at DESC LIMIT ? OFFSET ?"
+            params.extend([limit, offset])
+            
+            cursor.execute(query, params)
+            rows = cursor.fetchall()
+            
+            comments = []
+            for row in rows:
+                comments.append(Comment(
+                    id=row[0],
+                    article_id=row[1],
+                    content=row[2],
+                    writer_nickname=row[3],
+                    writer_id=row[4],
+                    created_at=datetime.fromisoformat(row[5]),
+                    parent_comment_id=row[6]
+                ))
+            
+            return comments
+    
+    def get_comments_count_by_filters(self, filters: Dict) -> int:
+        """필터 조건에 따른 댓글 수를 반환합니다."""
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.cursor()
+            
+            query = "SELECT COUNT(*) FROM comments WHERE 1=1"
+            params = []
+            
+            if "article_id" in filters:
+                query += " AND article_id = ?"
+                params.append(filters["article_id"])
+            
+            cursor.execute(query, params)
+            return cursor.fetchone()[0]
+    
+    def get_article_by_id(self, article_id: int) -> Optional[Article]:
+        """ID로 게시글을 조회합니다."""
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.cursor()
+            
+            cursor.execute("SELECT * FROM articles WHERE id = ?", (article_id,))
+            row = cursor.fetchone()
+            
+            if row:
+                return Article(
+                    id=row[0],
+                    platform_id=row[1],
+                    community_article_id=row[2],
+                    community_id=row[3],
+                    title=row[4],
+                    content=row[5],
+                    images=row[6],
+                    writer_nickname=row[7],
+                    writer_id=row[8],
+                    like_count=row[9],
+                    comment_count=row[10],
+                    view_count=row[11],
+                    created_at=datetime.fromisoformat(row[12]),
+                    category_name=row[13]
+                )
+            return None
+    
+    def get_review_by_id(self, review_id: int) -> Optional[Review]:
+        """ID로 후기를 조회합니다."""
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.cursor()
+            
+            cursor.execute("SELECT * FROM reviews WHERE id = ?", (review_id,))
+            row = cursor.fetchone()
+            
+            if row:
+                return Review(
+                    id=row[0],
+                    platform_id=row[1],
+                    platform_review_id=row[2],
+                    community_id=row[3],
+                    title=row[4],
+                    content=row[5],
+                    images=row[6],
+                    writer_nickname=row[7],
+                    writer_id=row[8],
+                    like_count=row[9],
+                    rating=row[10],
+                    price=row[11],
+                    categories=row[12],
+                    sub_categories=row[13],
+                    surgery_date=row[14],
+                    hospital_name=row[15],
+                    doctor_name=row[16],
+                    is_blind=bool(row[17]),
+                    is_image_blur=bool(row[18]),
+                    is_certificated_review=bool(row[19]),
+                    created_at=datetime.fromisoformat(row[20])
+                )
+            return None
+    
+    def get_platform_statistics(self, platform_id: str) -> Dict:
+        """특정 플랫폼의 통계를 반환합니다."""
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.cursor()
+            
+            # 게시글 수
+            cursor.execute("SELECT COUNT(*) FROM articles WHERE platform_id = ?", (platform_id,))
+            article_count = cursor.fetchone()[0]
+            
+            # 후기 수
+            cursor.execute("SELECT COUNT(*) FROM reviews WHERE platform_id = ?", (platform_id,))
+            review_count = cursor.fetchone()[0]
+            
+            # 댓글 수 (해당 플랫폼의 게시글에 달린 댓글)
+            cursor.execute('''
+                SELECT COUNT(*) FROM comments c
+                JOIN articles a ON c.article_id = a.id
+                WHERE a.platform_id = ?
+            ''', (platform_id,))
+            comment_count = cursor.fetchone()[0]
+            
+            return {
+                "articles": article_count,
+                "reviews": review_count,
+                "comments": comment_count
+            }
+    
+    def get_daily_statistics(self, date: str) -> Dict:
+        """특정 날짜의 통계를 반환합니다."""
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.cursor()
+            
+            # 해당 날짜의 게시글 수
+            cursor.execute('''
+                SELECT COUNT(*) FROM articles 
+                WHERE DATE(created_at) = ?
+            ''', (date,))
+            article_count = cursor.fetchone()[0]
+            
+            # 해당 날짜의 후기 수
+            cursor.execute('''
+                SELECT COUNT(*) FROM reviews 
+                WHERE DATE(created_at) = ?
+            ''', (date,))
+            review_count = cursor.fetchone()[0]
+            
+            # 해당 날짜의 댓글 수
+            cursor.execute('''
+                SELECT COUNT(*) FROM comments 
+                WHERE DATE(created_at) = ?
+            ''', (date,))
+            comment_count = cursor.fetchone()[0]
+            
+            return {
+                "articles": article_count,
+                "reviews": review_count,
+                "comments": comment_count
+            }
+    
+    def get_trend_statistics(self, days: int) -> Dict:
+        """최근 N일간의 트렌드 통계를 반환합니다."""
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.cursor()
+            
+            # 최근 N일간의 일별 통계
+            cursor.execute('''
+                SELECT 
+                    DATE(created_at) as date,
+                    COUNT(*) as count
+                FROM articles 
+                WHERE created_at >= DATE('now', '-{} days')
+                GROUP BY DATE(created_at)
+                ORDER BY date
+            '''.format(days))
+            article_trends = cursor.fetchall()
+            
+            cursor.execute('''
+                SELECT 
+                    DATE(created_at) as date,
+                    COUNT(*) as count
+                FROM reviews 
+                WHERE created_at >= DATE('now', '-{} days')
+                GROUP BY DATE(created_at)
+                ORDER BY date
+            '''.format(days))
+            review_trends = cursor.fetchall()
+            
+            return {
+                "article_trends": [{"date": row[0], "count": row[1]} for row in article_trends],
+                "review_trends": [{"date": row[0], "count": row[1]} for row in review_trends]
+            }
+    
+    def get_connection(self):
+        """데이터베이스 연결을 반환합니다."""
+        return sqlite3.connect(self.db_path) 
