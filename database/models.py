@@ -51,8 +51,32 @@ class ExcludedArticle:
     article_id: int
     created_at: datetime
 
+@dataclass
+class Review:
+    id: Optional[int]
+    platform_id: str  # "gangnamunni" 또는 "babitalk"
+    platform_review_id: int  # 각 플랫폼의 고유 후기 ID
+    community_id: int  # 커뮤니티 ID (바비톡의 경우 별도 커뮤니티 생성)
+    title: str  # 후기 제목 (바비톡의 경우 카테고리 정보)
+    content: str  # 후기 내용
+    images: str  # JSON 문자열로 저장
+    writer_nickname: str
+    writer_id: str
+    like_count: int
+    rating: int  # 평점 (바비톡용)
+    price: int  # 가격 (바비톡용)
+    categories: str  # JSON 문자열로 저장 (바비톡용)
+    sub_categories: str  # JSON 문자열로 저장 (바비톡용)
+    surgery_date: str  # 수술 날짜 (바비톡용)
+    hospital_name: str  # 병원명
+    doctor_name: str  # 담당의명
+    is_blind: bool  # 블라인드 여부 (바비톡용)
+    is_image_blur: bool  # 이미지 블러 여부 (바비톡용)
+    is_certificated_review: bool  # 인증 후기 여부 (바비톡용)
+    created_at: datetime
+
 class DatabaseManager:
-    def __init__(self, db_path: str = "collect_data.db"):
+    def __init__(self, db_path: str = "test_collect_data.db"):
         self.db_path = db_path
         self.init_database()
     
@@ -130,12 +154,45 @@ class DatabaseManager:
                 )
             ''')
             
+            # 후기 테이블 (통합)
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS reviews (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    platform_id TEXT NOT NULL,  -- "gangnamunni" 또는 "babitalk"
+                    platform_review_id INTEGER NOT NULL,  -- 각 플랫폼의 고유 후기 ID
+                    community_id INTEGER NOT NULL,
+                    title TEXT,  -- 후기 제목 (바비톡의 경우 카테고리 정보)
+                    content TEXT NOT NULL,  -- 후기 내용
+                    images TEXT,  -- JSON 문자열
+                    writer_nickname TEXT NOT NULL,
+                    writer_id TEXT NOT NULL,
+                    like_count INTEGER DEFAULT 0,
+                    rating INTEGER DEFAULT 0,  -- 평점 (바비톡용)
+                    price INTEGER DEFAULT 0,  -- 가격 (바비톡용)
+                    categories TEXT,  -- JSON 문자열 (바비톡용)
+                    sub_categories TEXT,  -- JSON 문자열 (바비톡용)
+                    surgery_date TEXT,  -- 수술 날짜 (바비톡용)
+                    hospital_name TEXT,  -- 병원명
+                    doctor_name TEXT,  -- 담당의명
+                    is_blind BOOLEAN DEFAULT FALSE,  -- 블라인드 여부 (바비톡용)
+                    is_image_blur BOOLEAN DEFAULT FALSE,  -- 이미지 블러 여부 (바비톡용)
+                    is_certificated_review BOOLEAN DEFAULT FALSE,  -- 인증 후기 여부 (바비톡용)
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (community_id) REFERENCES communities (id),
+                    UNIQUE(platform_id, platform_review_id)
+                )
+            ''')
+            
             # 인덱스 생성
             cursor.execute('CREATE INDEX IF NOT EXISTS idx_articles_community_id ON articles(community_id)')
             cursor.execute('CREATE INDEX IF NOT EXISTS idx_articles_created_at ON articles(created_at)')
             cursor.execute('CREATE INDEX IF NOT EXISTS idx_comments_article_id ON comments(article_id)')
             cursor.execute('CREATE INDEX IF NOT EXISTS idx_comments_parent_id ON comments(parent_comment_id)')
             cursor.execute('CREATE INDEX IF NOT EXISTS idx_communities_name ON communities(name)')
+            cursor.execute('CREATE INDEX IF NOT EXISTS idx_reviews_platform_id ON reviews(platform_id)')
+            cursor.execute('CREATE INDEX IF NOT EXISTS idx_reviews_platform_review_id ON reviews(platform_review_id)')
+            cursor.execute('CREATE INDEX IF NOT EXISTS idx_reviews_community_id ON reviews(community_id)')
+            cursor.execute('CREATE INDEX IF NOT EXISTS idx_reviews_created_at ON reviews(created_at)')
             
             conn.commit()
     
@@ -281,4 +338,123 @@ class DatabaseManager:
             cursor = conn.cursor()
             cursor.execute('SELECT * FROM communities WHERE name = ?', (name,))
             result = cursor.fetchone()
-            return dict(result) if result else None 
+            return dict(result) if result else None
+    
+    def insert_review(self, review: Review) -> int:
+        """후기 추가 (중복 체크 포함)"""
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.cursor()
+            try:
+                cursor.execute('''
+                    INSERT INTO reviews (
+                        platform_id, platform_review_id, community_id, title, content,
+                        images, writer_nickname, writer_id, like_count, rating,
+                        price, categories, sub_categories, surgery_date, hospital_name,
+                        doctor_name, is_blind, is_image_blur, is_certificated_review, created_at
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ''', (
+                    review.platform_id, review.platform_review_id, review.community_id,
+                    review.title, review.content, review.images, review.writer_nickname,
+                    review.writer_id, review.like_count, review.rating, review.price,
+                    review.categories, review.sub_categories, review.surgery_date,
+                    review.hospital_name, review.doctor_name, review.is_blind, 
+                    review.is_image_blur, review.is_certificated_review, review.created_at
+                ))
+                return cursor.lastrowid
+            except sqlite3.IntegrityError:
+                # 중복된 후기이면 기존 ID 반환
+                cursor.execute('''
+                    SELECT id FROM reviews 
+                    WHERE platform_id = ? AND platform_review_id = ?
+                ''', (review.platform_id, review.platform_review_id))
+                result = cursor.fetchone()
+                return result[0] if result else None
+    
+    def get_reviews_by_platform(self, platform_id: str, community_id: Optional[int] = None, limit: Optional[int] = None) -> List[Dict]:
+        """플랫폼별 후기 조회"""
+        with sqlite3.connect(self.db_path) as conn:
+            conn.row_factory = sqlite3.Row
+            cursor = conn.cursor()
+            
+            if community_id:
+                query = '''
+                    SELECT * FROM reviews 
+                    WHERE platform_id = ? AND community_id = ?
+                    ORDER BY created_at DESC
+                '''
+                params = (platform_id, community_id)
+            else:
+                query = '''
+                    SELECT * FROM reviews 
+                    WHERE platform_id = ?
+                    ORDER BY created_at DESC
+                '''
+                params = (platform_id,)
+            
+            if limit:
+                query += f' LIMIT {limit}'
+            
+            cursor.execute(query, params)
+            return [dict(row) for row in cursor.fetchall()]
+    
+    def get_reviews_by_date(self, date: str, platform_id: Optional[str] = None) -> List[Dict]:
+        """특정 날짜의 후기 조회"""
+        with sqlite3.connect(self.db_path) as conn:
+            conn.row_factory = sqlite3.Row
+            cursor = conn.cursor()
+            
+            if platform_id:
+                cursor.execute('''
+                    SELECT * FROM reviews 
+                    WHERE DATE(created_at) = ? AND platform_id = ?
+                    ORDER BY created_at DESC
+                ''', (date, platform_id))
+            else:
+                cursor.execute('''
+                    SELECT * FROM reviews 
+                    WHERE DATE(created_at) = ?
+                    ORDER BY created_at DESC
+                ''', (date,))
+            
+            return [dict(row) for row in cursor.fetchall()]
+    
+    def get_review_statistics(self) -> Dict:
+        """후기 통계 조회"""
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.cursor()
+            
+            # 전체 후기 수
+            cursor.execute('SELECT COUNT(*) FROM reviews')
+            total_reviews = cursor.fetchone()[0]
+            
+            # 플랫폼별 후기 수
+            cursor.execute('''
+                SELECT platform_id, COUNT(*) as count 
+                FROM reviews 
+                GROUP BY platform_id
+            ''')
+            platform_stats = dict(cursor.fetchall())
+            
+            # 최근 후기 수 (오늘)
+            cursor.execute('''
+                SELECT COUNT(*) FROM reviews 
+                WHERE DATE(created_at) = DATE('now')
+            ''')
+            today_reviews = cursor.fetchone()[0]
+            
+            # 평점별 후기 수 (바비톡용)
+            cursor.execute('''
+                SELECT rating, COUNT(*) as count 
+                FROM reviews 
+                WHERE platform_id = 'babitalk' AND rating > 0
+                GROUP BY rating
+                ORDER BY rating DESC
+            ''')
+            rating_stats = dict(cursor.fetchall())
+            
+            return {
+                'total_reviews': total_reviews,
+                'platform_stats': platform_stats,
+                'today_reviews': today_reviews,
+                'rating_stats': rating_stats
+            } 

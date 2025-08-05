@@ -238,8 +238,6 @@ class GangnamUnniAPI:
             # 오류 발생 시 오늘 날짜 반환
             return datetime.now().date()
     
-
-    
     async def get_comments(self, article_id: int) -> List[Comment]:
         """
         특정 게시글의 댓글 목록을 가져옵니다.
@@ -309,8 +307,6 @@ class GangnamUnniAPI:
             print(f"        🔍 에러 타입: {type(e).__name__}")
             # 오류가 발생해도 빈 리스트 반환 (pass 처리)
             return []
-    
-
     
     def _parse_article_from_api(self, data: Dict) -> Article:
         """
@@ -435,8 +431,6 @@ class GangnamUnniAPI:
         )
         
         return article
-    
-
     
     def _parse_comment_from_ssr(self, data: Dict) -> Comment:
         """
@@ -563,8 +557,6 @@ class GangnamUnniAPI:
             print(f"          📋 원본 데이터: {data}")
             raise e
     
-
-    
     async def search_articles(self, keyword: str, category: str = "hospital_question") -> List[Article]:
         """
         키워드로 게시글을 검색합니다.
@@ -593,65 +585,75 @@ class GangnamUnniAPI:
             print(f"게시글 검색 실패: {e}")
             return []
 
-# 사용 예시
-async def main():
+# 테스트 함수
+async def test_gannamunni_api():
+    """강남언니 API 테스트 함수"""
+    print("🧪 강남언니 API 테스트 시작")
+    print("=" * 50)
+    
     api = GangnamUnniAPI()
     
-    # 모든 카테고리의 게시글 수집
-    target_date = "2025-08-03"
-    categories = {
-        "hospital_question": "병원질문",
-        "surgery_question": "시술/수술질문", 
-        "free_chat": "자유수다",
-        "review": "발품후기",
-        "ask_doctor": "의사에게 물어보세요"
-    }
-    
-    all_articles = []
-    
-    for category_key, category_name in categories.items():
-        print(f"\n=== {category_name} 카테고리 수집 중 ===")
-        articles = await api.get_articles_by_date(target_date, category=category_key)
-        print(f"{category_name}: {len(articles)}개 게시글 수집됨")
+    try:
+        # 게시글 목록 테스트
+        print("📝 게시글 목록 테스트")
+        articles = await api.get_article_list(category="hospital_question", page=1, limit=5)
         
-        # 카테고리 정보 추가
-        for article in articles:
-            article.category_name = category_name
+        print(f"\n📊 게시글 목록 테스트 결과:")
+        print(f"   수집된 게시글: {len(articles)}개")
         
-        all_articles.extend(articles)
+        if articles:
+            print(f"\n📝 첫 번째 게시글 상세 정보:")
+            first_article = articles[0]
+            print(f"   ID: {first_article.id}")
+            print(f"   작성자: {first_article.writer.nickname}")
+            print(f"   카테고리: {first_article.category_name}")
+            print(f"   조회수: {first_article.view_count}")
+            print(f"   댓글 수: {first_article.comment_count}")
+            print(f"   작성시간: {first_article.create_time}")
+            print(f"   내용 미리보기: {first_article.contents[:100]}...")
+        
+        # 날짜별 게시글 테스트
+        print(f"\n📅 날짜별 게시글 테스트")
+        from datetime import datetime
+        today = datetime.now().strftime("%Y-%m-%d")
+        print(f"📅 오늘 날짜({today}) 게시글 수집 테스트")
+        
+        date_articles = await api.get_articles_by_date(today, category="hospital_question")
+        
+        print(f"📊 날짜별 게시글 테스트 결과:")
+        print(f"   수집된 게시글: {len(date_articles)}개")
+        
+        if date_articles:
+            print(f"\n📝 첫 번째 날짜별 게시글 상세 정보:")
+            first_date_article = date_articles[0]
+            print(f"   ID: {first_date_article.id}")
+            print(f"   작성자: {first_date_article.writer.nickname}")
+            print(f"   내용 미리보기: {first_date_article.contents[:100]}...")
+        
+        # 댓글 테스트 (게시글이 있는 경우에만)
+        if articles and articles[0].comment_count > 0:
+            print(f"\n💬 댓글 테스트")
+            comments = await api.get_comments(articles[0].id)
+            
+            print(f"📊 댓글 테스트 결과:")
+            print(f"   수집된 댓글: {len(comments)}개")
+            
+            if comments:
+                print(f"\n📝 첫 번째 댓글 상세 정보:")
+                first_comment = comments[0]
+                print(f"   ID: {first_comment.id}")
+                print(f"   작성자: {first_comment.writer.nickname}")
+                print(f"   내용: {first_comment.contents}")
+                print(f"   작성시간: {first_comment.create_time}")
+        
+    except Exception as e:
+        print(f"❌ 테스트 중 오류 발생: {e}")
+        import traceback
+        print(f"📋 상세 오류: {traceback.format_exc()}")
     
-    print(f"\n=== {target_date} 전체 게시글 목록 (총 {len(all_articles)}개) ===")
-    for i, article in enumerate(all_articles, 1):
-        print(f"\n{i}. 게시글 ID: {article.id}")
-        print(f"   카테고리: {article.category_name}")
-        print(f"   내용: {article.contents}")
-        print(f"   작성자: {article.writer.nickname} (레벨 {article.writer.level})")
-        print(f"   조회수: {article.view_count}, 댓글: {article.comment_count}")
-        print(f"   작성시간: {article.create_time}")
-        print(f"   사진 수: {len(article.photos)}")
-        
-        # 댓글이 있는 경우에만 댓글 가져오기 시도
-        if article.comment_count > 0:
-            try:
-                comments = await api.get_comments(article.id)
-                if comments:
-                    print(f"   === 댓글 목록 (총 {len(comments)}개) ===")
-                    for j, comment in enumerate(comments, 1):
-                        print(f"     {j}. 댓글 ID: {comment.id}")
-                        print(f"        작성자: {comment.writer.nickname} (레벨 {comment.writer.level})")
-                        print(f"        내용: {comment.contents}")
-                        print(f"        작성시간: {comment.create_time}")
-                        print(f"        좋아요: {comment.thumb_up_count}")
-                        
-                        if comment.replies:
-                            print(f"        대댓글 수: {len(comment.replies)}")
-                else:
-                    print("   댓글이 없습니다.")
-            except Exception as e:
-                print(f"   댓글 가져오기 실패: {e}")
-        else:
-            print("   댓글이 없습니다.")
+    print("=" * 50)
+    print("🧪 강남언니 API 테스트 완료")
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    asyncio.run(test_gannamunni_api())
 

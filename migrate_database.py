@@ -66,6 +66,16 @@ def verify_database_structure(db_path: str = "collect_data.db"):
                 unique_text = "UNIQUE" if unique else ""
                 print(f"   • {col_name} ({col_type}) {unique_text}")
             
+            # 후기 테이블 구조 확인
+            cursor.execute("PRAGMA table_info(reviews)")
+            columns = cursor.fetchall()
+            
+            print("\n⭐ 후기 테이블 구조:")
+            for col in columns:
+                col_name, col_type, not_null, default_val, pk, unique = col
+                unique_text = "UNIQUE" if unique else ""
+                print(f"   • {col_name} ({col_type}) {unique_text}")
+            
             # 인덱스 확인
             cursor.execute("SELECT name FROM sqlite_master WHERE type='index'")
             indexes = [row[0] for row in cursor.fetchall()]

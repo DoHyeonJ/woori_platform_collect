@@ -10,6 +10,7 @@ class DatabaseViewer:
     def show_statistics(self):
         """전체 통계 보기"""
         stats = self.db.get_statistics()
+        review_stats = self.db.get_review_statistics()
         
         print("=" * 50)
         print("📊 데이터베이스 통계")
@@ -22,6 +23,18 @@ class DatabaseViewer:
         print("📂 카테고리별 통계:")
         for category, count in stats['category_stats'].items():
             print(f"   • {category}: {count:,}개")
+        print()
+        
+        print("⭐ 후기 통계:")
+        print(f"   📝 전체 후기: {review_stats['total_reviews']:,}개")
+        print(f"   📅 오늘 후기: {review_stats['today_reviews']:,}개")
+        print("   📱 플랫폼별 후기:")
+        for platform, count in review_stats['platform_stats'].items():
+            print(f"      • {platform}: {count:,}개")
+        if review_stats['rating_stats']:
+            print("   ⭐ 평점별 후기 (바비톡):")
+            for rating, count in review_stats['rating_stats'].items():
+                print(f"      • {rating}점: {count:,}개")
         print("=" * 50)
     
     def show_recent_articles(self, limit: int = 10):
@@ -84,6 +97,39 @@ class DatabaseViewer:
             print(f"     내용: {article['content'][:80]}...")
             print(f"     작성자: {article['writer_nickname']} | 댓글: {article['comment_count']} | 조회: {article['view_count']}")
             print(f"     작성시간: {article['created_at']}")
+            print()
+    
+    def show_reviews_by_platform(self, platform_id: str, limit: int = 10):
+        """플랫폼별 후기 보기"""
+        reviews = self.db.get_reviews_by_platform(platform_id, limit=limit)
+        
+        print(f"\n⭐ {platform_id} 후기 (상위 {len(reviews)}개)")
+        print("-" * 50)
+        
+        for i, review in enumerate(reviews, 1):
+            print(f"{i:2d}. {review['title']}")
+            print(f"     내용: {review['content'][:80]}...")
+            print(f"     작성자: {review['writer_nickname']} | 좋아요: {review['like_count']}")
+            if review['rating'] > 0:
+                print(f"     평점: {review['rating']}점 | 가격: {review['price']:,}원")
+            print(f"     작성시간: {review['created_at']}")
+            print()
+    
+    def show_reviews_by_date(self, date: str, platform_id: str = None):
+        """특정 날짜 후기 보기"""
+        reviews = self.db.get_reviews_by_date(date, platform_id)
+        
+        platform_text = f" ({platform_id})" if platform_id else ""
+        print(f"\n📅 {date}{platform_text} 후기 목록 (총 {len(reviews)}개)")
+        print("-" * 50)
+        
+        for i, review in enumerate(reviews, 1):
+            print(f"{i:2d}. [{review['platform_id']}] {review['title']}")
+            print(f"     내용: {review['content'][:80]}...")
+            print(f"     작성자: {review['writer_nickname']} | 좋아요: {review['like_count']}")
+            if review['rating'] > 0:
+                print(f"     평점: {review['rating']}점 | 가격: {review['price']:,}원")
+            print(f"     작성시간: {review['created_at']}")
             print()
     
     def show_article_detail(self, article_id: int):
@@ -202,6 +248,8 @@ def main():
         print("5. 📝 게시글 상세 보기")
         print("6. 🔍 게시글 검색")
         print("7. 📊 일별 요약 보기")
+        print("8. ⭐ 플랫폼별 후기 보기")
+        print("9. 📅 특정 날짜 후기 보기")
         print("0. 종료")
         print("-" * 50)
         
@@ -252,6 +300,25 @@ def main():
             days = input("보여줄 일수 (기본값: 7): ").strip()
             days = int(days) if days.isdigit() else 7
             viewer.show_daily_summary(days)
+        
+        elif choice == "8":
+            print("플랫폼: gangnamunni, babitalk")
+            platform = input("플랫폼명: ").strip()
+            if platform:
+                limit = input("보여줄 개수 (기본값: 10): ").strip()
+                limit = int(limit) if limit.isdigit() else 10
+                viewer.show_reviews_by_platform(platform, limit)
+            else:
+                print("❌ 플랫폼을 입력해주세요.")
+        
+        elif choice == "9":
+            date = input("날짜 (YYYY-MM-DD): ").strip()
+            if date:
+                platform = input("플랫폼 (선택사항, gangnamunni/babitalk): ").strip()
+                platform = platform if platform else None
+                viewer.show_reviews_by_date(date, platform)
+            else:
+                print("❌ 날짜를 입력해주세요.")
         
         elif choice == "0":
             print("👋 프로그램을 종료합니다.")
