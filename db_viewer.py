@@ -4,7 +4,7 @@ from typing import List, Dict
 from database import DatabaseManager
 
 class DatabaseViewer:
-    def __init__(self, db_path: str = "gangnamunni.db"):
+    def __init__(self, db_path: str = "collect_data.db"):
         self.db = DatabaseManager(db_path)
     
     def show_statistics(self):

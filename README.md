@@ -1,18 +1,23 @@
-# 강남언니 여론모니터링 시스템
+# 다중 플랫폼 여론모니터링 시스템
 
-강남언니 커뮤니티의 게시글과 댓글을 수집하고 SQLite 데이터베이스에 저장하여 분석할 수 있는 시스템입니다.
+여러 커뮤니티 플랫폼의 게시글과 댓글을 수집하고 SQLite 데이터베이스에 저장하여 분석할 수 있는 시스템입니다.
+
+현재 지원 플랫폼:
+- **강남언니** (gangnamunni.com)
 
 ## 📁 파일 구조
 
 ```
-여론모니터링/
-├── 강남언니.py              # 강남언니 API 클래스
+woori_platform_collect/
+├── gannamunni.py           # 강남언니 API 클래스
 ├── database/
 │   ├── __init__.py          # 데이터베이스 패키지 초기화
 │   └── models.py            # 데이터베이스 모델 및 관리자
 ├── data_collector.py        # 데이터 수집 및 DB 저장 클래스
 ├── db_viewer.py            # 데이터베이스 뷰어 (대화형)
 ├── run_collector.py        # 데이터 수집 실행 스크립트
+├── migrate_database.py     # 데이터베이스 마이그레이션 스크립트
+├── collect_data.db         # SQLite 데이터베이스 파일
 └── README.md               # 프로젝트 설명서
 ```
 
@@ -22,7 +27,7 @@
 
 #### 1. communities (커뮤니티)
 - `id`: 고유 ID (PK)
-- `name`: 커뮤니티 명칭
+- `name`: 커뮤니티 명칭 (UNIQUE)
 - `created_at`: 등록일
 - `description`: 설명
 
@@ -100,7 +105,18 @@ python db_viewer.py
 - 🔍 게시글 검색
 - 📊 일별 요약 보기
 
-### 3. 프로그래밍 방식 사용
+### 3. 데이터베이스 마이그레이션
+
+```bash
+python migrate_database.py
+```
+
+마이그레이션 옵션:
+- 기존 데이터베이스 백업 후 초기화
+- 기존 데이터베이스 삭제 후 초기화 (백업 없음)
+- 취소
+
+### 4. 프로그래밍 방식 사용
 
 ```python
 from data_collector import DataCollector
@@ -161,7 +177,12 @@ pip install aiohttp
 
 ### 데이터베이스 초기화
 
-데이터베이스는 자동으로 생성되며, `gangnamunni.db` 파일이 생성됩니다.
+데이터베이스는 자동으로 생성되며, `collect_data.db` 파일이 생성됩니다.
+
+기존 데이터베이스를 초기화하려면:
+```bash
+python migrate_database.py
+```
 
 ## 📈 성능 최적화
 
@@ -186,11 +207,12 @@ pip install aiohttp
 
 ## 🔄 확장 가능성
 
-- 다른 플랫폼 추가 가능
+- 다른 플랫폼 추가 가능 (현재 강남언니 지원)
 - 추가 카테고리 지원
 - 실시간 모니터링 기능
 - 웹 인터페이스 추가
 - 데이터 내보내기 기능
+- 다중 플랫폼 통합 분석
 
 ## 📞 지원
 

@@ -250,32 +250,64 @@ class GangnamUnniAPI:
         Returns:
             List[Comment]: 댓글 목록
         """
+        print(f"        🔍 댓글 수집 시작: 게시글 ID {article_id}")
         try:
             async with aiohttp.ClientSession(headers=self.headers) as session:
-                # 댓글 API 엔드포인트
-                url = f"{self.base_url}/api/v2/community/{article_id}/comments"
+                # 게시글 상세 페이지 URL
+                url = f"{self.base_url}/community/{article_id}"
+                print(f"        📡 페이지 URL: {url}")
                 
                 async with session.get(url) as response:
+                    print(f"        📊 HTTP 상태: {response.status}")
+                    
                     if response.status != 200:
-                        raise Exception(f"HTTP {response.status}: {response.reason}")
+                        error_msg = f"HTTP {response.status}: {response.reason}"
+                        print(f"        ❌ HTTP 오류: {error_msg}")
+                        raise Exception(error_msg)
                     
-                    json_data = await response.json()
+                    html_content = await response.text()
+                    print(f"        📄 HTML 크기: {len(html_content)} bytes")
                     
-                    if json_data.get("reason") != "SUCCESS":
-                        raise Exception(f"API 응답 오류: {json_data.get('reason')}")
+                    # __NEXT_DATA__ 스크립트에서 댓글 데이터 추출
+                    import re
+                    import json
                     
-                    # 댓글 데이터 파싱
-                    comments_data = json_data.get("data", [])
+                    # __NEXT_DATA__ 스크립트 태그 찾기
+                    next_data_pattern = r'<script id="__NEXT_DATA__" type="application/json">(.*?)</script>'
+                    match = re.search(next_data_pattern, html_content, re.DOTALL)
                     
-                    comments = []
-                    for comment_data in comments_data:
-                        comment = self._parse_comment_from_api(comment_data)
-                        comments.append(comment)
+                    if not match:
+                        print(f"        ❌ __NEXT_DATA__ 스크립트를 찾을 수 없습니다.")
+                        return []
                     
-                    return comments
+                    try:
+                        next_data = json.loads(match.group(1))
+                        print(f"        ✅ __NEXT_DATA__ 파싱 성공")
+                        
+                        # 댓글 데이터 추출
+                        comments_data = next_data.get("props", {}).get("pageProps", {}).get("communityDocumentComments", [])
+                        print(f"        📋 원본 댓글 데이터: {len(comments_data)}개")
+                        
+                        comments = []
+                        for i, comment_data in enumerate(comments_data):
+                            try:
+                                comment = self._parse_comment_from_ssr(comment_data)
+                                comments.append(comment)
+                                print(f"        ✅ 댓글 {i+1} 파싱 성공: ID {comment.id}, 작성자 {comment.writer.nickname}")
+                            except Exception as parse_error:
+                                print(f"        ⚠️  댓글 {i+1} 파싱 실패: {parse_error}")
+                        
+                        print(f"        🎉 총 {len(comments)}개 댓글 파싱 완료")
+                        return comments
+                        
+                    except json.JSONDecodeError as e:
+                        print(f"        ❌ JSON 파싱 실패: {e}")
+                        return []
                     
         except Exception as e:
-            # 404 오류나 다른 오류가 발생해도 빈 리스트 반환 (pass 처리)
+            print(f"        ❌ 댓글 수집 실패: {e}")
+            print(f"        🔍 에러 타입: {type(e).__name__}")
+            # 오류가 발생해도 빈 리스트 반환 (pass 처리)
             return []
     
 
@@ -406,6 +438,67 @@ class GangnamUnniAPI:
     
 
     
+    def _parse_comment_from_ssr(self, data: Dict) -> Comment:
+        """
+        SSR 데이터의 댓글 데이터를 Comment 객체로 파싱합니다.
+        
+        Args:
+            data: SSR 댓글 데이터 딕셔너리
+        
+        Returns:
+            Comment: 파싱된 댓글 객체
+        """
+        try:
+            # 댓글 작성자 정보 파싱 (SSR 형식)
+            writer_data = data.get("writer", {})
+            writer = Writer(
+                id=writer_data.get("id", 0),
+                doctor_id=writer_data.get("doctorId"),
+                profile=writer_data.get("profile", ""),
+                nickname=writer_data.get("nickname", ""),
+                level=writer_data.get("level", 1),
+                engagement_type=writer_data.get("engagementType")
+            )
+            
+            # createTime은 이미 문자열 형태
+            create_time_str = data.get("createTime", "")
+            
+            # 대댓글 파싱
+            replies = []
+            replies_data = data.get("replies", [])
+            if replies_data:
+                print(f"          🔄 대댓글 {len(replies_data)}개 파싱 중...")
+                for reply_data in replies_data:
+                    reply = self._parse_comment_from_ssr(reply_data)
+                    replies.append(reply)
+            
+            # 댓글 객체 생성
+            comment = Comment(
+                id=data.get("id", 0),
+                status=data.get("status", 1),
+                writer=writer,
+                create_time=create_time_str,
+                reply_comment_id=data.get("replyCommentId"),
+                is_admin=data.get("isAdmin", False),
+                edited=data.get("edited", False),
+                contents=data.get("contents", ""),
+                has_thumb_up=data.get("hasThumbUp", False),
+                thumb_up_count=data.get("thumbUpCount", 0),
+                comment_count=data.get("commentCount", 0),
+                callee_nickname=data.get("calleeNickName"),
+                lang=data.get("lang", "ko"),
+                translate_result=data.get("translateResult"),
+                show_original_content=data.get("showOriginalContent", True),
+                replies=replies
+            )
+            
+            return comment
+            
+        except Exception as e:
+            print(f"          ❌ 댓글 파싱 실패: {e}")
+            print(f"          📋 원본 데이터: {data}")
+            raise e
+    
     def _parse_comment_from_api(self, data: Dict) -> Comment:
         """
         API 응답의 댓글 데이터를 Comment 객체로 파싱합니다.
@@ -416,50 +509,59 @@ class GangnamUnniAPI:
         Returns:
             Comment: 파싱된 댓글 객체
         """
-        # 댓글 작성자 정보 파싱 (API 형식)
-        writer = Writer(
-            id=data.get("writerId", 0),
-            doctor_id=data.get("writerDoctorId"),
-            profile=data.get("writerProfile", ""),
-            nickname=data.get("writerNickName", ""),
-            level=data.get("writerLevel", 1),
-            engagement_type=data.get("writerEngagementType")
-        )
-        
-        # createTime을 타임스탬프에서 문자열로 변환
-        create_time_timestamp = data.get("createTime", 0)
-        if create_time_timestamp:
-            create_time_str = self._timestamp_to_readable_time(create_time_timestamp)
-        else:
-            create_time_str = ""
-        
-        # 대댓글 파싱
-        replies = []
-        for reply_data in data.get("replies", []):
-            reply = self._parse_comment_from_api(reply_data)
-            replies.append(reply)
-        
-        # 댓글 객체 생성
-        comment = Comment(
-            id=data.get("id", 0),
-            status=data.get("status", 1),
-            writer=writer,
-            create_time=create_time_str,
-            reply_comment_id=data.get("replyCommentId"),
-            is_admin=data.get("isAdmin", False),
-            edited=data.get("edited", False),
-            contents=data.get("contents", ""),
-            has_thumb_up=data.get("hasThumbUp", False),
-            thumb_up_count=data.get("thumbUpCount", 0),
-            comment_count=data.get("commentCount", 0),
-            callee_nickname=data.get("calleeNickName"),
-            lang=data.get("lang", "ko"),
-            translate_result=data.get("translateResult"),
-            show_original_content=data.get("showOriginalContent", True),
-            replies=replies
-        )
-        
-        return comment
+        try:
+            # 댓글 작성자 정보 파싱 (API 형식)
+            writer = Writer(
+                id=data.get("writerId", 0),
+                doctor_id=data.get("writerDoctorId"),
+                profile=data.get("writerProfile", ""),
+                nickname=data.get("writerNickName", ""),
+                level=data.get("writerLevel", 1),
+                engagement_type=data.get("writerEngagementType")
+            )
+            
+            # createTime을 타임스탬프에서 문자열로 변환
+            create_time_timestamp = data.get("createTime", 0)
+            if create_time_timestamp:
+                create_time_str = self._timestamp_to_readable_time(create_time_timestamp)
+            else:
+                create_time_str = ""
+            
+            # 대댓글 파싱
+            replies = []
+            replies_data = data.get("replies", [])
+            if replies_data:
+                print(f"          🔄 대댓글 {len(replies_data)}개 파싱 중...")
+                for reply_data in replies_data:
+                    reply = self._parse_comment_from_api(reply_data)
+                    replies.append(reply)
+            
+            # 댓글 객체 생성
+            comment = Comment(
+                id=data.get("id", 0),
+                status=data.get("status", 1),
+                writer=writer,
+                create_time=create_time_str,
+                reply_comment_id=data.get("replyCommentId"),
+                is_admin=data.get("isAdmin", False),
+                edited=data.get("edited", False),
+                contents=data.get("contents", ""),
+                has_thumb_up=data.get("hasThumbUp", False),
+                thumb_up_count=data.get("thumbUpCount", 0),
+                comment_count=data.get("commentCount", 0),
+                callee_nickname=data.get("calleeNickName"),
+                lang=data.get("lang", "ko"),
+                translate_result=data.get("translateResult"),
+                show_original_content=data.get("showOriginalContent", True),
+                replies=replies
+            )
+            
+            return comment
+            
+        except Exception as e:
+            print(f"          ❌ 댓글 파싱 실패: {e}")
+            print(f"          📋 원본 데이터: {data}")
+            raise e
     
 
     

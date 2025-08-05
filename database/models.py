@@ -52,7 +52,7 @@ class ExcludedArticle:
     created_at: datetime
 
 class DatabaseManager:
-    def __init__(self, db_path: str = "gangnamunni.db"):
+    def __init__(self, db_path: str = "collect_data.db"):
         self.db_path = db_path
         self.init_database()
     
@@ -65,7 +65,7 @@ class DatabaseManager:
             cursor.execute('''
                 CREATE TABLE IF NOT EXISTS communities (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    name TEXT NOT NULL,
+                    name TEXT NOT NULL UNIQUE,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     description TEXT
                 )
@@ -135,18 +135,25 @@ class DatabaseManager:
             cursor.execute('CREATE INDEX IF NOT EXISTS idx_articles_created_at ON articles(created_at)')
             cursor.execute('CREATE INDEX IF NOT EXISTS idx_comments_article_id ON comments(article_id)')
             cursor.execute('CREATE INDEX IF NOT EXISTS idx_comments_parent_id ON comments(parent_comment_id)')
+            cursor.execute('CREATE INDEX IF NOT EXISTS idx_communities_name ON communities(name)')
             
             conn.commit()
     
     def insert_community(self, community: Community) -> int:
-        """커뮤니티 추가"""
+        """커뮤니티 추가 (중복 체크 포함)"""
         with sqlite3.connect(self.db_path) as conn:
             cursor = conn.cursor()
-            cursor.execute('''
-                INSERT INTO communities (name, created_at, description)
-                VALUES (?, ?, ?)
-            ''', (community.name, community.created_at, community.description))
-            return cursor.lastrowid
+            try:
+                cursor.execute('''
+                    INSERT INTO communities (name, created_at, description)
+                    VALUES (?, ?, ?)
+                ''', (community.name, community.created_at, community.description))
+                return cursor.lastrowid
+            except sqlite3.IntegrityError:
+                # 중복된 커뮤니티가면 기존 ID 반환
+                cursor.execute('SELECT id FROM communities WHERE name = ?', (community.name,))
+                result = cursor.fetchone()
+                return result[0] if result else None
     
     def insert_client(self, client: Client) -> int:
         """클라이언트 추가"""
@@ -265,4 +272,13 @@ class DatabaseManager:
                 'total_comments': total_comments,
                 'category_stats': category_stats,
                 'today_articles': today_articles
-            } 
+            }
+    
+    def get_community_by_name(self, name: str) -> Optional[Dict]:
+        """이름으로 커뮤니티 조회"""
+        with sqlite3.connect(self.db_path) as conn:
+            conn.row_factory = sqlite3.Row
+            cursor = conn.cursor()
+            cursor.execute('SELECT * FROM communities WHERE name = ?', (name,))
+            result = cursor.fetchone()
+            return dict(result) if result else None 

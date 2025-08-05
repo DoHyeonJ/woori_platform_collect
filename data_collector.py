@@ -6,7 +6,7 @@ from gannamunni import GangnamUnniAPI
 from database import DatabaseManager, Community, Client, Article, Comment
 
 class DataCollector:
-    def __init__(self, db_path: str = "gangnamunni.db"):
+    def __init__(self, db_path: str = "collect_data.db"):
         self.api = GangnamUnniAPI()
         self.db = DatabaseManager(db_path)
         self.platform_id = "gangnamunni"
@@ -96,24 +96,33 @@ class DataCollector:
                 
                 # 댓글이 있는 경우 댓글도 수집
                 if api_article.comment_count > 0:
+                    print(f"    📝 게시글 ID {api_article.id}: 댓글 {api_article.comment_count}개 수집 시도...")
                     try:
                         api_comments = await self.api.get_comments(api_article.id)
+                        print(f"    ✅ 댓글 API 호출 성공: {len(api_comments)}개 댓글 받음")
                         
                         for api_comment in api_comments:
                             # 메인 댓글 저장
                             db_comment = self._convert_comment_to_db_format(api_comment, article_db_id)
                             comment_db_id = self.db.insert_comment(db_comment)
                             category_comments += 1
+                            print(f"      💬 댓글 저장: ID {comment_db_id}, 작성자 {api_comment.writer.nickname}")
                             
                             # 대댓글이 있는 경우 대댓글도 저장
                             if api_comment.replies:
+                                print(f"      🔄 대댓글 {len(api_comment.replies)}개 처리 중...")
                                 for reply in api_comment.replies:
                                     db_reply = self._convert_comment_to_db_format(reply, article_db_id, comment_db_id)
-                                    self.db.insert_comment(db_reply)
+                                    reply_db_id = self.db.insert_comment(db_reply)
                                     category_comments += 1
-                                    
+                                    print(f"        💬 대댓글 저장: ID {reply_db_id}, 작성자 {reply.writer.nickname}")
                     except Exception as e:
-                        print(f"댓글 수집 실패 (게시글 ID: {api_article.id}): {e}")
+                        print(f"    ❌ 댓글 수집 실패 (게시글 ID: {api_article.id}): {e}")
+                        print(f"    🔍 에러 타입: {type(e).__name__}")
+                        import traceback
+                        print(f"    📋 상세 에러: {traceback.format_exc()}")
+                else:
+                    print(f"    ℹ️  게시글 ID {api_article.id}: 댓글 없음")
             
             print(f"{category_name}: 게시글 {category_articles}개, 댓글 {category_comments}개 저장됨")
             total_articles += category_articles
