@@ -7,6 +7,7 @@ class PlatformType(str, Enum):
     """플랫폼 타입"""
     GANGNAMUNNI = "gangnamunni"
     BABITALK = "babitalk"
+    NAVER = "naver"
 
 class GangnamUnniCategory(str, Enum):
     """강남언니 카테고리 상세"""
@@ -38,6 +39,12 @@ class BabitalkTalkService(int, Enum):
     BEAUTY_SKIN = 71      # 쁘띠/피부
     DAILY_LIFE = 72       # 일상
 
+class NaverCafeCategory(str, Enum):
+    """네이버 카페 카테고리"""
+    ALL_BOARDS = "all_boards"        # 전체 게시판
+    SPECIFIC_BOARD = "specific_board" # 특정 게시판
+    BY_DATE = "by_date"              # 날짜별
+
 class SortType(str, Enum):
     """정렬 타입"""
     RECENT = "recent"      # 최신순
@@ -68,6 +75,15 @@ class BabitalkCollectionRequest(BaseModel):
     # 자유톡 서비스별 수집 시 사용
     service_id: Optional[BabitalkTalkService] = Field(None, description="자유톡 서비스 ID (category가 talk일 때 필요)")
 
+class NaverCollectionRequest(BaseModel):
+    """네이버 카페 데이터 수집 요청 모델"""
+    cafe_id: str = Field(..., description="카페 ID (예: 10912875)")
+    category: NaverCafeCategory = Field(..., description="수집 카테고리")
+    target_date: Optional[str] = Field(None, description="수집할 날짜 (YYYY-MM-DD, category가 by_date일 때 필요)")
+    menu_id: Optional[str] = Field("", description="특정 게시판 ID (category가 specific_board일 때 필요)")
+    limit: int = Field(20, ge=1, le=100, description="페이지당 수집할 데이터 수 (1-100)")
+    cookies: str = Field(..., description="네이버 로그인 쿠키 (예: NID_AUT=...; NID_SES=...)")
+
 # 응답 모델들
 class CollectionResult(BaseModel):
     """데이터 수집 결과 모델"""
@@ -81,6 +97,22 @@ class CollectionResult(BaseModel):
     status: str = Field(..., description="수집 상태")
     message: str = Field(..., description="수집 결과 메시지")
     timestamp: datetime = Field(..., description="수집 완료 시간")
+
+class NaverBoardInfo(BaseModel):
+    """네이버 카페 게시판 정보"""
+    menu_id: int = Field(..., description="게시판 ID")
+    menu_name: str = Field(..., description="게시판 이름")
+    menu_type: str = Field(..., description="게시판 타입")
+    board_type: str = Field(..., description="보드 타입")
+    sort: int = Field(..., description="정렬 순서")
+
+class NaverBoardListResponse(BaseModel):
+    """네이버 카페 게시판 목록 응답"""
+    cafe_id: str = Field(..., description="카페 ID")
+    cafe_name: Optional[str] = Field(None, description="카페 이름")
+    boards: List[NaverBoardInfo] = Field(..., description="게시판 목록")
+    total_boards: int = Field(..., description="총 게시판 수")
+    timestamp: datetime = Field(..., description="조회 시간")
 
 class PaginatedResponse(BaseModel):
     """페이지네이션 응답 모델"""
