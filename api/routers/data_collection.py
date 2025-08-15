@@ -6,8 +6,8 @@ import time
 from datetime import datetime
 
 from api.models import (
-    CollectionRequest, BatchCollectionRequest, CollectionResult, 
-    BatchCollectionResult, PlatformType, CategoryType
+    CollectionResult, PlatformType,
+    GangnamUnniCollectionRequest, BabitalkCollectionRequest
 )
 from api.dependencies import get_database_manager
 from database.models import DatabaseManager
@@ -18,287 +18,6 @@ from collectors.babitalk_collector import BabitalkDataCollector
 
 router = APIRouter()
 
-@router.post("/collect", response_model=CollectionResult)
-async def collect_data(
-    request: CollectionRequest,
-    background_tasks: BackgroundTasks,
-    db: DatabaseManager = Depends(get_database_manager)
-):
-    """
-    특정 플랫폼과 카테고리의 데이터를 수집합니다.
-    """
-    start_time = time.time()
-    
-    try:
-        if request.platform == PlatformType.GANGNAMUNNI:
-            collector = GangnamUnniDataCollector(db.db_path)
-            
-            # 강남언니 카테고리 매핑
-            category_mapping = {
-                CategoryType.HOSPITAL_QUESTION: "hospital_question",
-                CategoryType.SURGERY_QUESTION: "surgery_question", 
-                CategoryType.FREE_CHAT: "free_chat",
-                CategoryType.REVIEW: "review",
-                CategoryType.ASK_DOCTOR: "ask_doctor"
-            }
-            
-            category = category_mapping.get(request.category, "hospital_question")
-            
-            # 단일 카테고리 수집
-            result = await collector.collect_articles_by_date(
-                target_date=request.target_date,
-                category=category,
-                save_as_reviews=request.save_as_reviews
-            )
-            
-            execution_time = time.time() - start_time
-            
-            return CollectionResult(
-                platform=request.platform,
-                category=request.category,
-                target_date=request.target_date,
-                total_articles=result,
-                total_comments=0,  # 강남언니는 댓글 수를 별도로 계산하지 않음
-                total_reviews=result if request.save_as_reviews else 0,
-                execution_time=execution_time,
-                status="success",
-                message=f"강남언니 {category} 데이터 수집 완료",
-                timestamp=datetime.now()
-            )
-            
-        elif request.platform == PlatformType.BABITALK:
-            collector = BabitalkDataCollector(db.db_path)
-            
-            # 바비톡 카테고리별 수집
-            if request.category == CategoryType.SURGERY_REVIEW:
-                result = await collector.collect_reviews_by_date(
-                    target_date=request.target_date,
-                    limit=request.limit
-                )
-                
-                execution_time = time.time() - start_time
-                
-                return CollectionResult(
-                    platform=request.platform,
-                    category=request.category,
-                    target_date=request.target_date,
-                    total_articles=0,
-                    total_comments=0,
-                    total_reviews=result,
-                    execution_time=execution_time,
-                    status="success",
-                    message="바비톡 시술후기 수집 완료",
-                    timestamp=datetime.now()
-                )
-                
-            elif request.category == CategoryType.EVENT_ASK_MEMO:
-                result = await collector.collect_all_event_ask_memos_by_date(
-                    target_date=request.target_date,
-                    limit=request.limit
-                )
-                
-                execution_time = time.time() - start_time
-                
-                return CollectionResult(
-                    platform=request.platform,
-                    category=request.category,
-                    target_date=request.target_date,
-                    total_articles=0,
-                    total_comments=0,
-                    total_reviews=result,
-                    execution_time=execution_time,
-                    status="success",
-                    message="바비톡 발품후기 수집 완료",
-                    timestamp=datetime.now()
-                )
-                
-            elif request.category == CategoryType.TALK:
-                result = await collector.collect_all_talks_by_date(
-                    target_date=request.target_date,
-                    limit=request.limit
-                )
-                
-                execution_time = time.time() - start_time
-                
-                return CollectionResult(
-                    platform=request.platform,
-                    category=request.category,
-                    target_date=request.target_date,
-                    total_articles=result,
-                    total_comments=0,
-                    total_reviews=0,
-                    execution_time=execution_time,
-                    status="success",
-                    message="바비톡 자유톡 수집 완료",
-                    timestamp=datetime.now()
-                )
-            else:
-                raise HTTPException(
-                    status_code=400,
-                    detail=f"지원하지 않는 바비톡 카테고리: {request.category}"
-                )
-        else:
-            raise HTTPException(
-                status_code=400,
-                detail=f"지원하지 않는 플랫폼: {request.platform}"
-            )
-            
-    except Exception as e:
-        execution_time = time.time() - start_time
-        raise HTTPException(
-            status_code=500,
-            detail=f"데이터 수집 실패: {str(e)}"
-        )
-
-@router.post("/collect/batch", response_model=BatchCollectionResult)
-async def collect_batch_data(
-    request: BatchCollectionRequest,
-    background_tasks: BackgroundTasks,
-    db: DatabaseManager = Depends(get_database_manager)
-):
-    """
-    특정 플랫폼의 모든 카테고리 데이터를 배치로 수집합니다.
-    """
-    start_time = time.time()
-    
-    try:
-        if request.platform == PlatformType.GANGNAMUNNI:
-            collector = GangnamUnniDataCollector(db.db_path)
-            
-            # 모든 카테고리 수집
-            result = await collector.collect_all_categories_by_date(
-                target_date=request.target_date,
-                save_as_reviews=request.save_as_reviews
-            )
-            
-            execution_time = time.time() - start_time
-            
-            # 카테고리별 결과 구성
-            categories = {}
-            total_articles = sum(result.values())
-            
-            for category, count in result.items():
-                categories[category] = CollectionResult(
-                    platform=request.platform,
-                    category=CategoryType(category),
-                    target_date=request.target_date,
-                    total_articles=count,
-                    total_comments=0,
-                    total_reviews=count if request.save_as_reviews else 0,
-                    execution_time=execution_time,
-                    status="success",
-                    message=f"강남언니 {category} 수집 완료",
-                    timestamp=datetime.now()
-                )
-            
-            return BatchCollectionResult(
-                platform=request.platform,
-                target_date=request.target_date,
-                categories=categories,
-                total_articles=total_articles,
-                total_comments=0,
-                total_reviews=total_articles if request.save_as_reviews else 0,
-                execution_time=execution_time,
-                status="success",
-                message="강남언니 전체 카테고리 수집 완료",
-                timestamp=datetime.now()
-            )
-            
-        elif request.platform == PlatformType.BABITALK:
-            collector = BabitalkDataCollector(db.db_path)
-            
-            # 바비톡 모든 카테고리 수집
-            categories = {}
-            total_articles = 0
-            total_reviews = 0
-            
-            # 시술후기 수집
-            surgery_reviews = await collector.collect_reviews_by_date(
-                target_date=request.target_date,
-                limit=request.limit
-            )
-            total_reviews += surgery_reviews
-            
-            categories["surgery_review"] = CollectionResult(
-                platform=request.platform,
-                category=CategoryType.SURGERY_REVIEW,
-                target_date=request.target_date,
-                total_articles=0,
-                total_comments=0,
-                total_reviews=surgery_reviews,
-                execution_time=0,
-                status="success",
-                message="바비톡 시술후기 수집 완료",
-                timestamp=datetime.now()
-            )
-            
-            # 발품후기 수집
-            event_ask_reviews = await collector.collect_all_event_ask_memos_by_date(
-                target_date=request.target_date,
-                limit=request.limit
-            )
-            total_reviews += event_ask_reviews
-            
-            categories["event_ask_memo"] = CollectionResult(
-                platform=request.platform,
-                category=CategoryType.EVENT_ASK_MEMO,
-                target_date=request.target_date,
-                total_articles=0,
-                total_comments=0,
-                total_reviews=event_ask_reviews,
-                execution_time=0,
-                status="success",
-                message="바비톡 발품후기 수집 완료",
-                timestamp=datetime.now()
-            )
-            
-            # 자유톡 수집
-            talks = await collector.collect_all_talks_by_date(
-                target_date=request.target_date,
-                limit=request.limit
-            )
-            total_articles += talks
-            
-            categories["talk"] = CollectionResult(
-                platform=request.platform,
-                category=CategoryType.TALK,
-                target_date=request.target_date,
-                total_articles=talks,
-                total_comments=0,
-                total_reviews=0,
-                execution_time=0,
-                status="success",
-                message="바비톡 자유톡 수집 완료",
-                timestamp=datetime.now()
-            )
-            
-            execution_time = time.time() - start_time
-            
-            return BatchCollectionResult(
-                platform=request.platform,
-                target_date=request.target_date,
-                categories=categories,
-                total_articles=total_articles,
-                total_comments=0,
-                total_reviews=total_reviews,
-                execution_time=execution_time,
-                status="success",
-                message="바비톡 전체 카테고리 수집 완료",
-                timestamp=datetime.now()
-            )
-        else:
-            raise HTTPException(
-                status_code=400,
-                detail=f"지원하지 않는 플랫폼: {request.platform}"
-            )
-            
-    except Exception as e:
-        execution_time = time.time() - start_time
-        raise HTTPException(
-            status_code=500,
-            detail=f"배치 데이터 수집 실패: {str(e)}"
-        )
-
 @router.get("/status")
 async def get_collection_status():
     """
@@ -306,85 +25,202 @@ async def get_collection_status():
     """
     return {
         "status": "available",
-        "supported_platforms": ["gangnamunni", "babitalk"],
-        "supported_categories": {
-            "gangnamunni": ["hospital_question", "surgery_question", "free_chat", "review", "ask_doctor"],
-            "babitalk": ["surgery_review", "event_ask_memo", "talk"]
+        "supported_platforms": {
+            "gangnamunni": {
+                "name": "강남언니",
+                "categories": {
+                    "hospital_question": "병원질문",
+                    "surgery_question": "시술/수술질문",
+                    "free_chat": "자유수다",
+                    "review": "발품후기",
+                    "ask_doctor": "의사에게 물어보세요"
+                }
+            },
+            "babitalk": {
+                "name": "바비톡",
+                "categories": {
+                    "surgery_review": "시술 후기",
+                    "event_ask_memo": "발품후기 (카테고리 ID 필요)",
+                    "talk": "자유톡 (서비스 ID 필요, 댓글 자동 수집)"
+                },
+                "event_ask_categories": {
+                    3000: "눈",
+                    3100: "코",
+                    3200: "지방흡입/이식",
+                    3300: "안면윤곽/양악",
+                    3400: "가슴",
+                    3500: "남자성형",
+                    3600: "기타"
+                },
+                "talk_services": {
+                    79: "성형",
+                    71: "쁘띠/피부",
+                    72: "일상"
+                }
+            }
+        },
+        "api_endpoints": {
+            "강남언니": "/collect/gannamunni",
+            "바비톡": "/collect/babitalk"
         },
         "timestamp": datetime.now().isoformat()
     }
 
-@router.post("/collect/babitalk/comments")
-async def collect_babitalk_comments(
-    talk_id: int,
+@router.post("/collect/gannamunni", response_model=CollectionResult)
+async def collect_gannamunni_data(
+    request: GangnamUnniCollectionRequest,
     db: DatabaseManager = Depends(get_database_manager)
 ):
     """
-    특정 바비톡 자유톡의 댓글을 수집합니다.
+    강남언니 데이터를 수집합니다.
     """
     start_time = time.time()
     
     try:
-        collector = BabitalkDataCollector(db.db_path)
+        collector = GangnamUnniDataCollector(db.db_path)
         
-        # 댓글 수집
-        result = await collector.collect_comments_for_talk(talk_id)
+        # 강남언니 데이터 수집
+        result = await collector.collect_articles_by_date(
+            target_date=request.target_date,
+            category=request.category,
+            save_as_reviews=request.save_as_reviews
+        )
         
         execution_time = time.time() - start_time
         
-        return {
-            "talk_id": talk_id,
-            "total_comments": result,
-            "execution_time": execution_time,
-            "status": "success",
-            "message": f"바비톡 자유톡 {talk_id} 댓글 수집 완료",
-            "timestamp": datetime.now().isoformat()
-        }
+        return CollectionResult(
+            platform=PlatformType.GANGNAMUNNI,
+            category=request.category,
+            target_date=request.target_date,
+            total_articles=result,
+            total_comments=0,
+            total_reviews=result if request.save_as_reviews else 0,
+            execution_time=execution_time,
+            status="success",
+            message=f"강남언니 {request.category} 데이터 수집 완료",
+            timestamp=datetime.now()
+        )
         
     except Exception as e:
         execution_time = time.time() - start_time
         raise HTTPException(
             status_code=500,
-            detail=f"댓글 수집 실패: {str(e)}"
+            detail=f"강남언니 데이터 수집 실패: {str(e)}"
         )
 
-@router.post("/collect/babitalk/comments/by-date")
-async def collect_babitalk_comments_by_date(
-    target_date: str,
-    service_id: int = 79,  # 기본값: 성형 카테고리
-    limit_per_page: int = 24,
+@router.post("/collect/babitalk", response_model=CollectionResult)
+async def collect_babitalk_data(
+    request: BabitalkCollectionRequest,
     db: DatabaseManager = Depends(get_database_manager)
 ):
     """
-    특정 날짜의 바비톡 자유톡들의 댓글을 수집합니다.
+    바비톡 데이터를 수집합니다.
+    카테고리에 따라 시술후기, 발품후기, 자유톡을 수집하며,
+    자유톡 수집 시 댓글도 자동으로 수집됩니다.
     """
     start_time = time.time()
     
     try:
         collector = BabitalkDataCollector(db.db_path)
         
-        # 댓글 수집
-        result = await collector.collect_comments_for_talks_by_date(
-            target_date=target_date,
-            service_id=service_id,
-            limit_per_page=limit_per_page
-        )
-        
-        execution_time = time.time() - start_time
-        
-        return {
-            "target_date": target_date,
-            "service_id": service_id,
-            "total_comments": result,
-            "execution_time": execution_time,
-            "status": "success",
-            "message": f"바비톡 {target_date} 날짜 자유톡 댓글 수집 완료",
-            "timestamp": datetime.now().isoformat()
-        }
-        
+        if request.category == "surgery_review":
+            # 시술후기 수집
+            result = await collector.collect_reviews_by_date(
+                target_date=request.target_date,
+                limit=request.limit
+            )
+            
+            execution_time = time.time() - start_time
+            
+            return CollectionResult(
+                platform=PlatformType.BABITALK,
+                category=request.category,
+                target_date=request.target_date,
+                total_articles=0,
+                total_comments=0,
+                total_reviews=result,
+                execution_time=execution_time,
+                status="success",
+                message="바비톡 시술후기 수집 완료",
+                timestamp=datetime.now()
+            )
+            
+        elif request.category == "event_ask_memo":
+            # 발품후기 수집 (카테고리 ID 필요)
+            if not request.category_id:
+                raise HTTPException(
+                    status_code=400,
+                    detail="발품후기 수집 시에는 category_id가 필요합니다."
+                )
+            
+            result = await collector.collect_event_ask_memos_by_date(
+                target_date=request.target_date,
+                category_id=request.category_id,
+                limit_per_page=request.limit
+            )
+            
+            execution_time = time.time() - start_time
+            
+            return CollectionResult(
+                platform=PlatformType.BABITALK,
+                category=request.category,
+                target_date=request.target_date,
+                total_articles=0,
+                total_comments=0,
+                total_reviews=result,
+                execution_time=execution_time,
+                status="success",
+                message=f"바비톡 발품후기 수집 완료 (카테고리: {request.category_id})",
+                timestamp=datetime.now()
+            )
+            
+        elif request.category == "talk":
+            # 자유톡 수집 (서비스 ID 필요, 댓글 자동 수집)
+            if not request.service_id:
+                raise HTTPException(
+                    status_code=400,
+                    detail="자유톡 수집 시에는 service_id가 필요합니다."
+                )
+            
+            # 자유톡 수집
+            talks_result = await collector.collect_talks_by_date(
+                target_date=request.target_date,
+                service_id=request.service_id,
+                limit_per_page=request.limit
+            )
+            
+            # 자유톡에 대한 댓글 자동 수집
+            comments_result = await collector.collect_comments_for_talks_by_date(
+                target_date=request.target_date,
+                service_id=request.service_id,
+                limit_per_page=request.limit
+            )
+            
+            execution_time = time.time() - start_time
+            
+            return CollectionResult(
+                platform=PlatformType.BABITALK,
+                category=request.category,
+                target_date=request.target_date,
+                total_articles=talks_result,
+                total_comments=comments_result,
+                total_reviews=0,
+                execution_time=execution_time,
+                status="success",
+                message=f"바비톡 자유톡 수집 완료 (서비스: {request.service_id}), 댓글 {comments_result}개 자동 수집",
+                timestamp=datetime.now()
+            )
+        else:
+            raise HTTPException(
+                status_code=400,
+                detail=f"지원하지 않는 바비톡 카테고리: {request.category}"
+            )
+            
     except Exception as e:
         execution_time = time.time() - start_time
         raise HTTPException(
             status_code=500,
-            detail=f"댓글 수집 실패: {str(e)}"
-        ) 
+            detail=f"바비톡 데이터 수집 실패: {str(e)}"
+        )
+
+ 

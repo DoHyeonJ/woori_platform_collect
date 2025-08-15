@@ -21,7 +21,7 @@ class Client:
 class Article:
     id: Optional[int]
     platform_id: str
-    community_article_id: int
+    community_article_id: str
     community_id: int
     title: str
     content: str
@@ -57,7 +57,7 @@ class ExcludedArticle:
 class Review:
     id: Optional[int]
     platform_id: str  # "gangnamunni" 또는 "babitalk"
-    platform_review_id: int  # 각 플랫폼의 고유 후기 ID
+    platform_review_id: str  # 각 플랫폼의 고유 후기 ID
     community_id: int  # 커뮤니티 ID (바비톡의 경우 별도 커뮤니티 생성)
     title: str  # 후기 제목 (바비톡의 경우 카테고리 정보)
     content: str  # 후기 내용
@@ -113,7 +113,7 @@ class DatabaseManager:
                 CREATE TABLE IF NOT EXISTS articles (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     platform_id TEXT NOT NULL,
-                    community_article_id INTEGER NOT NULL,
+                    community_article_id TEXT NOT NULL,
                     community_id INTEGER NOT NULL,
                     title TEXT,
                     content TEXT NOT NULL,
@@ -163,8 +163,8 @@ class DatabaseManager:
             cursor.execute('''
                 CREATE TABLE IF NOT EXISTS reviews (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    platform_id TEXT NOT NULL,  -- "gangnamunni" 또는 "babitalk"
-                    platform_review_id INTEGER NOT NULL,  -- 각 플랫폼의 고유 후기 ID
+                    platform_id TEXT NOT NULL,  -- "gangnamun니" 또는 "babitalk"
+                    platform_review_id TEXT NOT NULL,  -- 각 플랫폼의 고유 후기 ID
                     community_id INTEGER NOT NULL,
                     title TEXT,  -- 후기 제목 (바비톡의 경우 카테고리 정보)
                     content TEXT NOT NULL,  -- 후기 내용
@@ -660,7 +660,7 @@ class DatabaseManager:
                 )
             return None
     
-    def get_article_by_platform_id_and_community_article_id(self, platform_id: str, community_article_id: int) -> Optional[Dict]:
+    def get_article_by_platform_id_and_community_article_id(self, platform_id: str, community_article_id: str) -> Optional[Dict]:
         """플랫폼 ID와 커뮤니티 게시글 ID로 게시글 조회"""
         with sqlite3.connect(self.db_path) as conn:
             cursor = conn.cursor()

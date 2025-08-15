@@ -258,7 +258,7 @@ class GangnamUnniDataCollector(LoggedClass):
             db_article = DBArticle(
                 id=None,
                 platform_id="gangnamunni",
-                community_article_id=article.id,
+                community_article_id=str(article.id),
                 community_id=community_id,
                 title=article.title or f"강남언니 게시글 {article.id}",
                 content=article.contents,
@@ -298,7 +298,7 @@ class GangnamUnniDataCollector(LoggedClass):
             db_review = Review(
                 id=None,
                 platform_id="gangnamunni",
-                platform_review_id=article.id,
+                platform_review_id=str(article.id),
                 community_id=community_id,
                 title=article.title or f"강남언니 후기 {article.id}",
                 content=article.contents,

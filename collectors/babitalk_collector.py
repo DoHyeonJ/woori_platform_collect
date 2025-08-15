@@ -94,7 +94,7 @@ class BabitalkDataCollector(LoggedClass):
         
         try:
             # API에서 해당 날짜의 후기 데이터 가져오기
-            reviews = await self.api.get_reviews_by_date(target_date, limit_per_page)
+            reviews = await self.api.get_reviews_by_date(target_date, limit=limit_per_page)
             
             if not reviews:
                 self.log_info(f"📭 {target_date} 날짜에 수집할 후기가 없습니다.")
@@ -287,7 +287,7 @@ class BabitalkDataCollector(LoggedClass):
         
         try:
             # 먼저 해당 자유톡이 데이터베이스에 있는지 확인
-            article = self.db.get_article_by_platform_id_and_community_article_id("babitalk_talk", talk_id)
+            article = self.db.get_article_by_platform_id_and_community_article_id("babitalk_talk", str(talk_id))
             
             if not article:
                 print(f"⚠️  자유톡 ID {talk_id}가 데이터베이스에 없습니다. 먼저 자유톡을 수집해주세요.")
@@ -430,7 +430,7 @@ class BabitalkDataCollector(LoggedClass):
             db_review = Review(
                 id=None,
                 platform_id="babitalk",
-                platform_review_id=review.id,
+                platform_review_id=str(review.id),
                 community_id=community_id,
                 title=title,
                 content=review.text,
@@ -481,7 +481,7 @@ class BabitalkDataCollector(LoggedClass):
             db_memo = Review(
                 id=None,
                 platform_id="babitalk_event_ask",  # 발품후기임을 구분하기 위한 플랫폼 ID
-                platform_review_id=memo.id,
+                platform_review_id=str(memo.id),
                 community_id=community_id,
                 title=title,
                 content=memo.text,
@@ -537,7 +537,7 @@ class BabitalkDataCollector(LoggedClass):
             db_article = Article(
                 id=None,
                 platform_id="babitalk_talk",
-                community_article_id=talk.id,
+                community_article_id=str(talk.id),
                 community_id=community_id,
                 title=talk.title,
                 content=talk.text,

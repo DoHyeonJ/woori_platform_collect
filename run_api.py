@@ -23,7 +23,7 @@ def main():
     
     # 환경 변수 설정
     host = os.getenv("API_HOST", "0.0.0.0")
-    port = int(os.getenv("API_PORT", "8000"))
+    port = int(os.getenv("API_PORT", "8080"))
     reload = os.getenv("API_RELOAD", "true").lower() == "true"
     log_level = os.getenv("API_LOG_LEVEL", "info")
     
