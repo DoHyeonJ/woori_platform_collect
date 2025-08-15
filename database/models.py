@@ -38,12 +38,12 @@ class Article:
 @dataclass
 class Comment:
     id: Optional[int]
-    article_id: int
+    article_id: str  # 게시글 ID (기존 테이블 구조)
     content: str
     writer_nickname: str
     writer_id: str
     created_at: datetime
-    parent_comment_id: Optional[int] = None  # 대댓글인 경우 부모 댓글 ID
+    parent_comment_id: Optional[str] = None  # 대댓글인 경우 부모 댓글 ID
     collected_at: Optional[datetime] = None  # 수집 시간
 
 @dataclass
@@ -135,15 +135,17 @@ class DatabaseManager:
             cursor.execute('''
                 CREATE TABLE IF NOT EXISTS comments (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    article_id INTEGER NOT NULL,
+                    platform_id TEXT NOT NULL, -- 플랫폼 ID
+                    community_article_id TEXT NOT NULL, -- 커뮤니티 게시글 ID
+                    community_comment_id TEXT NOT NULL, -- 커뮤니티 댓글 ID
                     content TEXT NOT NULL,
                     writer_nickname TEXT NOT NULL,
                     writer_id TEXT NOT NULL,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    parent_comment_id INTEGER,
+                    parent_comment_id TEXT, -- 대댓글인 경우 부모 댓글 ID
                     collected_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,  -- 수집 시간
-                    FOREIGN KEY (article_id) REFERENCES articles (id),
-                    FOREIGN KEY (parent_comment_id) REFERENCES comments (id)
+                    FOREIGN KEY (platform_id, community_article_id) REFERENCES articles (platform_id, community_article_id),
+                    FOREIGN KEY (parent_comment_id) REFERENCES comments (community_comment_id)
                 )
             ''')
             
@@ -192,7 +194,7 @@ class DatabaseManager:
             # 인덱스 생성
             cursor.execute('CREATE INDEX IF NOT EXISTS idx_articles_community_id ON articles(community_id)')
             cursor.execute('CREATE INDEX IF NOT EXISTS idx_articles_created_at ON articles(created_at)')
-            cursor.execute('CREATE INDEX IF NOT EXISTS idx_comments_article_id ON comments(article_id)')
+            cursor.execute('CREATE INDEX IF NOT EXISTS idx_comments_article_id ON comments(platform_id, community_article_id)')
             cursor.execute('CREATE INDEX IF NOT EXISTS idx_comments_parent_id ON comments(parent_comment_id)')
             cursor.execute('CREATE INDEX IF NOT EXISTS idx_communities_name ON communities(name)')
             cursor.execute('CREATE INDEX IF NOT EXISTS idx_reviews_platform_id ON reviews(platform_id)')
@@ -262,12 +264,13 @@ class DatabaseManager:
         with sqlite3.connect(self.db_path) as conn:
             cursor = conn.cursor()
             cursor.execute('''
-                INSERT INTO comments (article_id, content, writer_nickname, writer_id, created_at, parent_comment_id, collected_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?)
+                INSERT INTO comments (
+                    article_id, content, writer_nickname, writer_id, 
+                    created_at, parent_comment_id, collected_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?)
             ''', (
-                comment.article_id, comment.content, comment.writer_nickname,
-                comment.writer_id, comment.created_at, comment.parent_comment_id, 
-                comment.collected_at or datetime.now()
+                comment.article_id, comment.content, comment.writer_nickname, comment.writer_id,
+                comment.created_at, comment.parent_comment_id, comment.collected_at or datetime.now()
             ))
             return cursor.lastrowid
     
@@ -292,8 +295,8 @@ class DatabaseManager:
             
             return [dict(row) for row in cursor.fetchall()]
     
-    def get_comments_by_article_id(self, article_id: int) -> List[Dict]:
-        """특정 게시글의 댓글 조회"""
+    def get_comments_by_article_id(self, article_id: str) -> List[Dict]:
+        """특정 게시글의 댓글 조회 (기존 테이블 구조)"""
         with sqlite3.connect(self.db_path) as conn:
             conn.row_factory = sqlite3.Row
             cursor = conn.cursor()
@@ -303,6 +306,30 @@ class DatabaseManager:
                 ORDER BY created_at ASC
             ''', (article_id,))
             return [dict(row) for row in cursor.fetchall()]
+    
+    def get_comment_by_article_id_and_comment_id(self, article_id: str, comment_id: str) -> Optional[Dict]:
+        """게시글 ID와 댓글 ID로 댓글 조회 (기존 테이블 구조)"""
+        with sqlite3.connect(self.db_path) as conn:
+            conn.row_factory = sqlite3.Row
+            cursor = conn.cursor()
+            cursor.execute('''
+                SELECT * FROM comments 
+                WHERE article_id = ? AND id = ?
+            ''', (article_id, comment_id))
+            result = cursor.fetchone()
+            return dict(result) if result else None
+    
+    def get_comment_by_platform_id_and_community_comment_id(self, platform_id: str, community_comment_id: str) -> Optional[Dict]:
+        """플랫폼 ID와 커뮤니티 댓글 ID로 댓글 조회"""
+        with sqlite3.connect(self.db_path) as conn:
+            conn.row_factory = sqlite3.Row
+            cursor = conn.cursor()
+            cursor.execute('''
+                SELECT * FROM comments 
+                WHERE platform_id = ? AND community_comment_id = ?
+            ''', (platform_id, community_comment_id))
+            result = cursor.fetchone()
+            return dict(result) if result else None
     
     def get_statistics(self) -> Dict:
         """데이터베이스 통계 조회"""
@@ -594,9 +621,13 @@ class DatabaseManager:
             query = "SELECT * FROM comments WHERE 1=1"
             params = []
             
-            if "article_id" in filters:
-                query += " AND article_id = ?"
-                params.append(filters["article_id"])
+            if "platform_id" in filters:
+                query += " AND platform_id = ?"
+                params.append(filters["platform_id"])
+            
+            if "community_article_id" in filters:
+                query += " AND community_article_id = ?"
+                params.append(filters["community_article_id"])
             
             query += " ORDER BY created_at DESC LIMIT ? OFFSET ?"
             params.extend([limit, offset])
@@ -608,12 +639,14 @@ class DatabaseManager:
             for row in rows:
                 comments.append(Comment(
                     id=row[0],
-                    article_id=row[1],
-                    content=row[2],
-                    writer_nickname=row[3],
-                    writer_id=row[4],
-                    created_at=datetime.fromisoformat(row[5]),
-                    parent_comment_id=row[6]
+                    platform_id=row[1],
+                    community_article_id=row[2],
+                    community_comment_id=row[3],
+                    content=row[4],
+                    writer_nickname=row[5],
+                    writer_id=row[6],
+                    created_at=datetime.fromisoformat(row[7]),
+                    parent_comment_id=row[8]
                 ))
             
             return comments
@@ -626,9 +659,13 @@ class DatabaseManager:
             query = "SELECT COUNT(*) FROM comments WHERE 1=1"
             params = []
             
-            if "article_id" in filters:
-                query += " AND article_id = ?"
-                params.append(filters["article_id"])
+            if "platform_id" in filters:
+                query += " AND platform_id = ?"
+                params.append(filters["platform_id"])
+            
+            if "community_article_id" in filters:
+                query += " AND community_article_id = ?"
+                params.append(filters["community_article_id"])
             
             cursor.execute(query, params)
             return cursor.fetchone()[0]
@@ -745,7 +782,7 @@ class DatabaseManager:
             # 댓글 수 (해당 플랫폼의 게시글에 달린 댓글)
             cursor.execute('''
                 SELECT COUNT(*) FROM comments c
-                JOIN articles a ON c.article_id = a.id
+                JOIN articles a ON c.platform_id = a.platform_id AND c.community_article_id = a.community_article_id
                 WHERE a.platform_id = ?
             ''', (platform_id,))
             comment_count = cursor.fetchone()[0]

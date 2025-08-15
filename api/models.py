@@ -39,12 +39,6 @@ class BabitalkTalkService(int, Enum):
     BEAUTY_SKIN = 71      # 쁘띠/피부
     DAILY_LIFE = 72       # 일상
 
-class NaverCafeCategory(str, Enum):
-    """네이버 카페 카테고리"""
-    ALL_BOARDS = "all_boards"        # 전체 게시판
-    SPECIFIC_BOARD = "specific_board" # 특정 게시판
-    BY_DATE = "by_date"              # 날짜별
-
 class SortType(str, Enum):
     """정렬 타입"""
     RECENT = "recent"      # 최신순
@@ -77,12 +71,11 @@ class BabitalkCollectionRequest(BaseModel):
 
 class NaverCollectionRequest(BaseModel):
     """네이버 카페 데이터 수집 요청 모델"""
-    cafe_id: str = Field(..., description="카페 ID (예: 10912875)")
-    category: NaverCafeCategory = Field(..., description="수집 카테고리")
-    target_date: Optional[str] = Field(None, description="수집할 날짜 (YYYY-MM-DD, category가 by_date일 때 필요)")
-    menu_id: Optional[str] = Field("", description="특정 게시판 ID (category가 specific_board일 때 필요)")
-    limit: int = Field(20, ge=1, le=100, description="페이지당 수집할 데이터 수 (1-100)")
-    cookies: str = Field(..., description="네이버 로그인 쿠키 (예: NID_AUT=...; NID_SES=...)")
+    cafe_id: str = Field("12285441", description="카페 ID (예: 10912875)")
+    target_date: Optional[str] = Field(None, description="수집할 날짜 (YYYY-MM-DD, 비워두면 오늘 날짜)")
+    menu_id: Optional[str] = Field("38", description="특정 게시판 ID (비워두면 전체 게시판)")
+    limit: int = Field(20, ge=0, le=100, description="수집할 데이터 수 (0: 제한없음, 1-100: 지정된 수만큼)")
+    cookies: str = Field("", description="네이버 로그인 쿠키 (예: NID_AUT=...; NID_SES=...)")
 
 # 응답 모델들
 class CollectionResult(BaseModel):

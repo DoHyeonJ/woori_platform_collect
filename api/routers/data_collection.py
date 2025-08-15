@@ -1,9 +1,10 @@
-from fastapi import APIRouter, HTTPException, Depends, BackgroundTasks, Header
+from fastapi import APIRouter, HTTPException, Depends, BackgroundTasks, Header, Query, Body
 from fastapi.responses import JSONResponse
 from typing import List, Dict, Any, Optional
 import asyncio
 import time
 from datetime import datetime
+import logging
 
 from api.models import (
     CollectionResult, PlatformType,
@@ -17,6 +18,9 @@ from database.models import DatabaseManager
 from collectors.gannamunni_collector import GangnamUnniDataCollector
 from collectors.babitalk_collector import BabitalkDataCollector
 from collectors.naver_collector import NaverDataCollector
+
+# 로거 설정
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -61,21 +65,17 @@ async def get_collection_status():
                 }
             },
             "naver": {
-                "name": "네이버 카페",
-                "categories": {
-                    "all_boards": "전체 게시판",
-                    "specific_board": "특정 게시판",
-                    "by_date": "날짜별"
+                "description": "네이버 카페 데이터 수집",
+                "endpoints": {
+                    "GET /boards/naver/{cafe_id}": "게시판 목록 조회 (쿠키 불필요)",
+                    "GET /content/naver/{cafe_id}": "게시글 제목과 내용 조회 (쿠키 불필요)",
+                    "POST /collect/naver": "게시글 수집 및 저장 (쿠키 필요)",
+                    "POST /collect/naver/detailed": "상세 내용과 함께 게시글 수집 (쿠키 필요)"
                 },
-                "supported_cafes": {
-                    "여우야": "10912875",
-                    "A+여우야": "12285441",
-                    "성형위키백과": "11498714",
-                    "여생남정": "13067396",
-                    "시크먼트": "23451561",
-                    "가아사": "15880379",
-                    "파우더룸": "10050813"
-                }
+                "supported_cafes": [
+                    "여우야 (10912875)", "A+여우야 (12285441)", "성형위키백과 (11498714)",
+                    "여생남정 (13067396)", "시크먼트 (23451561)", "가아사 (15880379)", "파우더룸 (10050813)"
+                ]
             }
         },
         "api_endpoints": {
@@ -88,59 +88,65 @@ async def get_collection_status():
     }
 
 @router.get("/boards/naver/{cafe_id}", response_model=NaverBoardListResponse)
-async def get_naver_boards(
-    cafe_id: str
+async def get_naver_board_list(
+    cafe_id: str,
+    db: DatabaseManager = Depends(get_database_manager)
 ):
-    """
-    네이버 카페의 게시판 목록을 조회합니다.
-    
-    게시판 목록은 공개 정보이므로 로그인이 필요하지 않습니다.
-    """
+    """네이버 카페 게시판 목록 조회 (쿠키 불필요)"""
     try:
-        # 기본 쿠키 설정 (게시판 목록 조회용)
-        default_cookies = "NID_AUT=; NID_SES=; NID_JKL="
+        from platforms.naver import NaverCafeAPI
         
-        # 수집기 생성 (데이터베이스 저장 없이 게시판 목록만 조회)
-        collector = NaverDataCollector("data/collect_data.db", default_cookies)
+        # 기본 쿠키로 API 생성 (게시판 목록은 공개 정보)
+        api = NaverCafeAPI()
+        boards = await api.get_board_list(cafe_id)
         
-        # 게시판 목록 조회
-        boards = await collector.collect_board_list(cafe_id)
-        
-        if boards is None:
-            raise HTTPException(
-                status_code=500,
-                detail="게시판 목록 조회에 실패했습니다."
+        if boards:
+            return NaverBoardListResponse(
+                cafe_id=cafe_id,
+                boards=boards,
+                total=len(boards)
             )
-        
-        # 카페 이름 조회
-        cafe_name = collector.api.get_cafe_name_by_id(cafe_id)
-        
-        # 응답 모델 생성
-        board_info_list = []
-        for board in boards:
-            board_info_list.append({
-                "menu_id": int(board.menu_id),  # int로 확실하게 변환
-                "menu_name": board.menu_name,
-                "menu_type": board.menu_type,
-                "board_type": board.board_type,
-                "sort": board.sort
-            })
-        
-        return NaverBoardListResponse(
-            cafe_id=cafe_id,
-            cafe_name=cafe_name,
-            boards=board_info_list,
-            total_boards=len(boards),
-            timestamp=datetime.now()
-        )
-        
-    except HTTPException:
-        raise
+        else:
+            return NaverBoardListResponse(
+                cafe_id=cafe_id,
+                boards=[],
+                total=0
+            )
+            
     except Exception as e:
         raise HTTPException(
             status_code=500,
             detail=f"게시판 목록 조회 실패: {str(e)}"
         )
+
+@router.get("/content/naver/{cafe_id}", response_model=Dict[str, Any])
+async def get_naver_board_content(
+    cafe_id: str,
+    menu_id: str = Query("", description="게시판 ID (비워두면 전체)"),
+    per_page: int = Query(5, ge=1, le=20, description="가져올 게시글 수 (1-20)")
+):
+    """네이버 카페 게시글 제목과 내용 조회 (쿠키 불필요)"""
+    try:
+        from platforms.naver import NaverCafeAPI
+        
+        api = NaverCafeAPI()
+        result = await api.get_board_title_and_content(cafe_id, menu_id, per_page)
+        
+        return {
+            "cafe_id": cafe_id,
+            "menu_id": menu_id,
+            "per_page": per_page,
+            "result": result,
+            "timestamp": datetime.now().isoformat()
+        }
+        
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"게시글 내용 조회 실패: {str(e)}"
+        )
+
+
 
 @router.post("/collect/gannamunni", response_model=CollectionResult)
 async def collect_gannamunni_data(
@@ -306,109 +312,126 @@ async def collect_naver_data(
 ):
     """
     네이버 카페 데이터를 수집합니다.
-    카테고리에 따라 전체 게시판, 특정 게시판, 날짜별로 수집할 수 있습니다.
+    target_date가 지정되면 해당 날짜의 게시글을, 비워두면 오늘 날짜의 게시글을 수집합니다.
+    limit이 0이면 제한없이 수집하고, 1-100이면 지정된 수만큼 수집합니다.
     
-    request의 cookies 필드에 네이버 로그인 쿠키를 포함해야 합니다.
-    예: NID_AUT=...; NID_SES=...
+    기본값:
+    - cafe_id: 12285441 (A+여우야★성형카페)
+    - target_date: 오늘 날짜
+    - menu_id: 38
+    - limit: 20
+    - cookies: 빈 값 (공개 정보만 수집)
     """
     start_time = time.time()
     
     try:
-        # 네이버 쿠키 검증
-        if not request.cookies:
-            raise HTTPException(
-                status_code=400,
-                detail="네이버 쿠키가 필요합니다. cookies 필드에 네이버 로그인 쿠키를 포함해주세요."
-            )
+        # 기본값 설정
+        cafe_id = request.cafe_id or "12285441"
+        target_date = request.target_date or datetime.now().strftime("%Y-%m-%d")
+        menu_id = request.menu_id or "38"
+        limit = request.limit if request.limit > 0 else 20
+        cookies = request.cookies or ""
         
-        collector = NaverDataCollector(db.db_path, request.cookies)
+        # 로깅
+        logger.info(f"네이버 수집 시작 - 카페: {cafe_id}, 날짜: {target_date}, 게시판: {menu_id}, 제한: {limit}")
         
-        if request.category == "all_boards":
-            # 전체 게시판 수집
-            results = await collector.collect_all_boards_articles(
-                cafe_id=request.cafe_id,
-                per_page=request.limit
-            )
-            
-            total_articles = sum(results.values())
-            execution_time = time.time() - start_time
-            
-            return CollectionResult(
-                platform=PlatformType.NAVER,
-                category=request.category,
-                target_date=request.target_date or datetime.now().strftime("%Y-%m-%d"),
-                total_articles=total_articles,
-                total_comments=0,
-                total_reviews=0,
-                execution_time=execution_time,
-                status="success",
-                message=f"네이버 카페 {request.cafe_id} 전체 게시판 수집 완료 (총 {total_articles}개)",
-                timestamp=datetime.now()
-            )
-            
-        elif request.category == "specific_board":
-            # 특정 게시판 수집
-            if not request.menu_id:
-                raise HTTPException(
-                    status_code=400,
-                    detail="특정 게시판 수집 시에는 menu_id가 필요합니다."
+        # 수집기 생성
+        collector = NaverDataCollector(db.db_path, cookies)
+        
+        # target_date가 지정된 경우 날짜별 수집
+        if target_date:
+            if request.limit == 0:
+                # 날짜별 전체 게시글 수집 (댓글 포함)
+                result = await collector.collect_articles_by_date_with_comments(
+                    cafe_id=cafe_id,
+                    target_date=target_date,
+                    menu_id=menu_id
                 )
-            
-            result = await collector.collect_articles_by_menu(
-                cafe_id=request.cafe_id,
-                menu_id=request.menu_id,
-                per_page=request.limit
-            )
-            
-            execution_time = time.time() - start_time
-            
-            return CollectionResult(
-                platform=PlatformType.NAVER,
-                category=request.category,
-                target_date=request.target_date or datetime.now().strftime("%Y-%m-%d"),
-                total_articles=result,
-                total_comments=0,
-                total_reviews=0,
-                execution_time=execution_time,
-                status="success",
-                message=f"네이버 카페 {request.cafe_id} 게시판 {request.menu_id} 수집 완료 ({result}개)",
-                timestamp=datetime.now()
-            )
-            
-        elif request.category == "by_date":
-            # 날짜별 수집
-            if not request.target_date:
-                raise HTTPException(
-                    status_code=400,
-                    detail="날짜별 수집 시에는 target_date가 필요합니다."
+                
+                execution_time = time.time() - start_time
+                
+                return CollectionResult(
+                    platform=PlatformType.NAVER,
+                    category="by_date",
+                    target_date=target_date,
+                    total_articles=result.get('saved', 0),
+                    total_comments=result.get('comments_saved', 0),
+                    total_reviews=0,
+                    execution_time=execution_time,
+                    status="success",
+                    message=f"네이버 카페 {cafe_id} {target_date} 날짜별 전체 수집 완료 (게시글: {result.get('saved', 0)}개, 댓글: {result.get('comments_saved', 0)}개)",
+                    timestamp=datetime.now()
                 )
-            
-            result = await collector.collect_articles_by_date(
-                cafe_id=request.cafe_id,
-                target_date=request.target_date,
-                menu_id=request.menu_id or "",
-                per_page=request.limit
-            )
-            
-            execution_time = time.time() - start_time
-            
-            return CollectionResult(
-                platform=PlatformType.NAVER,
-                category=request.category,
-                target_date=request.target_date,
-                total_articles=result,
-                total_comments=0,
-                total_reviews=0,
-                execution_time=execution_time,
-                status="success",
-                message=f"네이버 카페 {request.cafe_id} {request.target_date} 날짜별 수집 완료 ({result}개)",
-                timestamp=datetime.now()
-            )
+            else:
+                # 날짜별 제한 수집 (댓글 포함)
+                result = await collector.collect_articles_with_content_and_comments(
+                    cafe_id=cafe_id,
+                    menu_id=menu_id,
+                    per_page=limit,
+                    target_date=target_date
+                )
+                
+                execution_time = time.time() - start_time
+                
+                return CollectionResult(
+                    platform=PlatformType.NAVER,
+                    category="by_date",
+                    target_date=target_date,
+                    total_articles=result.get('saved', 0),
+                    total_comments=result.get('comments_saved', 0),
+                    total_reviews=0,
+                    execution_time=execution_time,
+                    status="success",
+                    message=f"네이버 카페 {cafe_id} {target_date} 날짜별 제한 수집 완료 (게시글: {result.get('saved', 0)}개, 댓글: {result.get('comments_saved', 0)}개)",
+                    timestamp=datetime.now()
+                )
         else:
-            raise HTTPException(
-                status_code=400,
-                detail=f"지원하지 않는 네이버 카테고리: {request.category}"
-            )
+            # target_date가 없는 경우 최신 게시글 수집
+            if request.menu_id:
+                # 특정 게시판 수집
+                result = await collector.collect_articles_with_content_and_comments(
+                    cafe_id=cafe_id,
+                    menu_id=request.menu_id,
+                    per_page=request.limit if request.limit > 0 else 100,
+                    target_date=request.target_date
+                )
+                
+                execution_time = time.time() - start_time
+                
+                return CollectionResult(
+                    platform=PlatformType.NAVER,
+                    category="specific_board",
+                    target_date=request.target_date,
+                    total_articles=result.get('saved', 0),
+                    total_comments=result.get('comments_saved', 0),
+                    total_reviews=0,
+                    execution_time=execution_time,
+                    status="success",
+                    message=f"네이버 카페 {cafe_id} 게시판 {request.menu_id} 최신 수집 완료 (게시글: {result.get('saved', 0)}개, 댓글: {result.get('comments_saved', 0)}개)",
+                    timestamp=datetime.now()
+                )
+            else:
+                # 전체 게시판 수집
+                results = await collector.collect_all_boards_articles(
+                    cafe_id=cafe_id,
+                    per_page=limit
+                )
+                
+                total_articles = sum(results.values())
+                execution_time = time.time() - start_time
+                
+                return CollectionResult(
+                    platform=PlatformType.NAVER,
+                    category="all_boards",
+                    target_date=datetime.now().strftime("%Y-%m-%d"),
+                    total_articles=total_articles,
+                    total_comments=0,
+                    total_reviews=0,
+                    execution_time=execution_time,
+                    status="success",
+                    message=f"네이버 카페 {cafe_id} 전체 게시판 최신 수집 완료 (총 {total_articles}개)",
+                    timestamp=datetime.now()
+                )
             
     except HTTPException:
         raise
