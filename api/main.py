@@ -12,8 +12,35 @@ import os
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from api.routers import data_collection, data_viewer
-from api.dependencies import get_database_manager
+from api.dependencies import get_database_manager, get_sqlalchemy_database_manager
 from database.models import DatabaseManager
+from database.config import db_config
+from utils.logger import get_logger
+
+# 로거 설정
+logger = get_logger("API_MAIN")
+
+# 데이터베이스 초기화 함수
+def initialize_database():
+    """서버 시작 시 데이터베이스 테이블을 초기화합니다."""
+    apps_env = os.getenv("APPS_ENV", "local")
+    
+    try:
+        logger.info(f"🗄️ 데이터베이스 초기화 시작 (환경: {apps_env})...")
+        
+        # SQLAlchemy 기반 테이블 생성 (local 환경에서만)
+        db_config.create_tables()
+        
+        # 기존 SQLite 매니저도 초기화 (local 환경에서만)
+        if apps_env == "local":
+            db_manager = get_database_manager()
+            db_manager.init_database()
+        
+        logger.info("✅ 데이터베이스 초기화 완료")
+        
+    except Exception as e:
+        logger.error(f"❌ 데이터베이스 초기화 중 오류 발생: {e}")
+        raise
 
 # FastAPI 앱 생성
 app = FastAPI(
@@ -23,6 +50,14 @@ app = FastAPI(
     docs_url="/docs",
     redoc_url="/redoc"
 )
+
+# 서버 시작 시 이벤트
+@app.on_event("startup")
+async def startup_event():
+    """서버 시작 시 실행되는 이벤트"""
+    logger.info("🚀 API 서버 시작 중...")
+    initialize_database()
+    logger.info("🎉 API 서버 준비 완료!")
 
 # CORS 미들웨어 설정
 app.add_middleware(
