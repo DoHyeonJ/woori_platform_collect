@@ -110,10 +110,16 @@ python scripts/migrate_comments_table.py
 ### 4. API 서버 실행
 
 ```bash
-# 개발 모드
+# 권장 방법 (새로운 표준 구조)
+python main.py
+
+# 기존 방법 (호환성 유지)
 python run_api.py
 
-# 또는 직접 실행
+# uvicorn으로 직접 실행
+uvicorn main:app --reload --host 0.0.0.0 --port 8000
+
+# 또는 기존 방식
 uvicorn api.main:app --reload --host 0.0.0.0 --port 8000
 ```
 

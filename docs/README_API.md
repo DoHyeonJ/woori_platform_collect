@@ -220,7 +220,9 @@ RUN pip install -r requirements.txt
 COPY . .
 EXPOSE 8000
 
-CMD ["uvicorn", "api.main:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["python", "main.py"]
+# 또는
+# CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
 ```
 
 ### 시스템 서비스로 등록
@@ -239,7 +241,9 @@ Type=simple
 User=www-data
 WorkingDirectory=/path/to/project
 Environment=PATH=/path/to/venv/bin
-ExecStart=/path/to/venv/bin/uvicorn api.main:app --host 0.0.0.0 --port 8000
+ExecStart=/path/to/venv/bin/python /path/to/project/main.py
+# 또는
+# ExecStart=/path/to/venv/bin/uvicorn main:app --host 0.0.0.0 --port 8000
 Restart=always
 
 [Install]

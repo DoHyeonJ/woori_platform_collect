@@ -133,7 +133,10 @@ DB_TYPE=mysql
 ### 2. API 서버 재시작
 
 ```bash
-# API 서버 재시작
+# 권장 방법
+python main.py
+
+# 또는 기존 방법
 python run_api.py
 ```
 
