@@ -166,6 +166,28 @@ class SQLAlchemyDatabaseManager:
         finally:
             session.close()
     
+    def get_article_by_id(self, article_id: int) -> Optional[Dict]:
+        """ID로 게시글 조회"""
+        session = self.get_session()
+        try:
+            article = session.query(Article).filter(Article.id == article_id).first()
+            if article:
+                return self._article_to_dict(article)
+            return None
+        finally:
+            session.close()
+    
+    def get_review_by_id(self, review_id: int) -> Optional[Dict]:
+        """ID로 후기 조회"""
+        session = self.get_session()
+        try:
+            review = session.query(Review).filter(Review.id == review_id).first()
+            if review:
+                return self._review_to_dict(review)
+            return None
+        finally:
+            session.close()
+    
     def get_articles_by_filters(self, filters: Dict, limit: int = 20, offset: int = 0) -> List[Dict]:
         """필터 조건에 따라 게시글 조회"""
         session = self.get_session()
@@ -317,6 +339,25 @@ class SQLAlchemyDatabaseManager:
         finally:
             session.close()
     
+    def get_comments_count_by_filters(self, filters: Dict) -> int:
+        """필터 조건에 따른 댓글 수 반환"""
+        session = self.get_session()
+        try:
+            query = session.query(Comment)
+            
+            if "platform_id" in filters:
+                query = query.filter(Comment.platform_id == filters["platform_id"])
+            
+            if "community_article_id" in filters:
+                query = query.filter(Comment.community_article_id == filters["community_article_id"])
+            
+            if "article_id" in filters:
+                query = query.filter(Comment.article_id == filters["article_id"])
+            
+            return query.count()
+        finally:
+            session.close()
+    
     # Review 관련 메서드
     def insert_review(self, review_data: Dict) -> int:
         """후기 추가 (중복 체크 포함)"""
@@ -382,6 +423,22 @@ class SQLAlchemyDatabaseManager:
             reviews = query.order_by(desc(Review.created_at)).offset(offset).limit(limit).all()
             
             return [self._review_to_dict(review) for review in reviews]
+        finally:
+            session.close()
+    
+    def get_reviews_count_by_filters(self, filters: Dict) -> int:
+        """필터 조건에 따른 후기 수 반환"""
+        session = self.get_session()
+        try:
+            query = session.query(Review)
+            
+            if "platform_id" in filters:
+                query = query.filter(Review.platform_id == filters["platform_id"])
+            
+            if "category_name" in filters:
+                query = query.filter(Review.title.contains(filters["category_name"]))
+            
+            return query.count()
         finally:
             session.close()
     

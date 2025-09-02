@@ -176,9 +176,6 @@ class BabitalkAPI(LoggedClass):
                 
                 if search_after is not None:
                     params["search_after"] = search_after
-
-                print(params)
-                print(url)
                 
                 async with session.get(url, params=params) as response:
                     if response.status != 200:

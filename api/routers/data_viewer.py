@@ -39,21 +39,21 @@ async def get_articles(
         article_responses = []
         for article in articles:
             article_responses.append(Article(
-                id=article.id,
-                platform_id=article.platform_id,
-                community_article_id=article.community_article_id,
-                community_id=article.community_id,
-                title=article.title,
-                content=article.content,
-                writer_nickname=article.writer_nickname,
-                writer_id=article.writer_id,
-                like_count=article.like_count,
-                comment_count=article.comment_count,
-                view_count=article.view_count,
-                images=article.images,
-                created_at=article.created_at,
-                category_name=article.category_name,
-                collected_at=article.collected_at
+                id=article['id'],
+                platform_id=article['platform_id'],
+                community_article_id=article['community_article_id'],
+                community_id=article['community_id'],
+                title=article['title'],
+                content=article['content'],
+                writer_nickname=article['writer_nickname'],
+                writer_id=article['writer_id'],
+                like_count=article['like_count'],
+                comment_count=article['comment_count'],
+                view_count=article['view_count'],
+                images=article['images'],
+                created_at=article['created_at'],
+                category_name=article['category_name'],
+                collected_at=article['collected_at']
             ))
         
         total_pages = (total + limit - 1) // limit
@@ -103,28 +103,28 @@ async def get_reviews(
         review_responses = []
         for review in reviews:
             review_responses.append(Review(
-                id=review.id,
-                platform_id=review.platform_id,
-                platform_review_id=review.platform_review_id,
-                community_id=review.community_id,
-                title=review.title,
-                content=review.content,
-                writer_nickname=review.writer_nickname,
-                writer_id=review.writer_id,
-                like_count=review.like_count,
-                rating=review.rating,
-                price=review.price,
-                images=review.images,
-                categories=review.categories,
-                sub_categories=review.sub_categories,
-                surgery_date=review.surgery_date,
-                hospital_name=review.hospital_name,
-                doctor_name=review.doctor_name,
-                is_blind=review.is_blind,
-                is_image_blur=review.is_image_blur,
-                is_certificated_review=review.is_certificated_review,
-                created_at=review.created_at,
-                collected_at=review.collected_at
+                id=review['id'],
+                platform_id=review['platform_id'],
+                platform_review_id=review['platform_review_id'],
+                community_id=review['community_id'],
+                title=review['title'],
+                content=review['content'],
+                writer_nickname=review['writer_nickname'],
+                writer_id=review['writer_id'],
+                like_count=review['like_count'],
+                rating=review['rating'],
+                price=review['price'],
+                images=review['images'],
+                categories=review['categories'],
+                sub_categories=review['sub_categories'],
+                surgery_date=review['surgery_date'],
+                hospital_name=review['hospital_name'],
+                doctor_name=review['doctor_name'],
+                is_blind=review['is_blind'],
+                is_image_blur=review['is_image_blur'],
+                is_certificated_review=review['is_certificated_review'],
+                created_at=review['created_at'],
+                collected_at=review['collected_at']
             ))
         
         total_pages = (total + limit - 1) // limit
@@ -174,18 +174,18 @@ async def get_comments(
         comment_responses = []
         for comment in comments:
             comment_responses.append(Comment(
-                id=comment.id,
-                platform_id=comment.platform_id,
-                community_article_id=comment.community_article_id,
-                community_id=comment.community_id,
-                comment_id=comment.comment_id,
-                parent_comment_id=comment.parent_comment_id,
-                content=comment.content,
-                writer_nickname=comment.writer_nickname,
-                writer_id=comment.writer_id,
-                like_count=comment.like_count,
-                created_at=comment.created_at,
-                collected_at=comment.collected_at
+                id=comment['id'],
+                platform_id=comment['platform_id'],
+                community_article_id=comment['community_article_id'],
+                community_id=comment.get('community_id', 1),  # 기본값 설정
+                comment_id=comment['community_comment_id'],  # 필드명 수정
+                parent_comment_id=comment['parent_comment_id'],
+                content=comment['content'],
+                writer_nickname=comment['writer_nickname'],
+                writer_id=comment['writer_id'],
+                like_count=comment.get('like_count', 0),  # 기본값 설정
+                created_at=comment['created_at'],
+                collected_at=comment['collected_at']
             ))
         
         total_pages = (total + limit - 1) // limit
@@ -223,21 +223,21 @@ async def get_article(
             )
         
         return Article(
-            id=article.id,
-            platform_id=article.platform_id,
-            community_article_id=article.community_article_id,
-            community_id=article.community_id,
-            title=article.title,
-            content=article.content,
-            writer_nickname=article.writer_nickname,
-            writer_id=article.writer_id,
-            like_count=article.like_count,
-            comment_count=article.comment_count,
-            view_count=article.view_count,
-            images=article.images,
-            created_at=article.created_at,
-            category_name=article.category_name,
-            collected_at=article.collected_at
+            id=article['id'],
+            platform_id=article['platform_id'],
+            community_article_id=article['community_article_id'],
+            community_id=article['community_id'],
+            title=article['title'],
+            content=article['content'],
+            writer_nickname=article['writer_nickname'],
+            writer_id=article['writer_id'],
+            like_count=article['like_count'],
+            comment_count=article['comment_count'],
+            view_count=article['view_count'],
+            images=article['images'],
+            created_at=article['created_at'],
+            category_name=article['category_name'],
+            collected_at=article['collected_at']
         )
         
     except HTTPException:
@@ -265,28 +265,28 @@ async def get_review(
             )
         
         return Review(
-            id=review.id,
-            platform_id=review.platform_id,
-            platform_review_id=review.platform_review_id,
-            community_id=review.community_id,
-            title=review.title,
-            content=review.content,
-            writer_nickname=review.writer_nickname,
-            writer_id=review.writer_id,
-            like_count=review.like_count,
-            rating=review.rating,
-            price=review.price,
-            images=review.images,
-            categories=review.categories,
-            sub_categories=review.sub_categories,
-            surgery_date=review.surgery_date,
-            hospital_name=review.hospital_name,
-            doctor_name=review.doctor_name,
-            is_blind=review.is_blind,
-            is_image_blur=review.is_image_blur,
-            is_certificated_review=review.is_certificated_review,
-            created_at=review.created_at,
-            collected_at=review.collected_at
+            id=review['id'],
+            platform_id=review['platform_id'],
+            platform_review_id=review['platform_review_id'],
+            community_id=review['community_id'],
+            title=review['title'],
+            content=review['content'],
+            writer_nickname=review['writer_nickname'],
+            writer_id=review['writer_id'],
+            like_count=review['like_count'],
+            rating=review['rating'],
+            price=review['price'],
+            images=review['images'],
+            categories=review['categories'],
+            sub_categories=review['sub_categories'],
+            surgery_date=review['surgery_date'],
+            hospital_name=review['hospital_name'],
+            doctor_name=review['doctor_name'],
+            is_blind=review['is_blind'],
+            is_image_blur=review['is_image_blur'],
+            is_certificated_review=review['is_certificated_review'],
+            created_at=review['created_at'],
+            collected_at=review['collected_at']
         )
         
     except HTTPException:
@@ -314,18 +314,18 @@ async def get_comment(
             )
         
         return Comment(
-            id=comment.id,
-            platform_id=comment.platform_id,
-            community_article_id=comment.community_article_id,
-            community_id=comment.community_id,
-            comment_id=comment.comment_id,
-            parent_comment_id=comment.parent_comment_id,
-            content=comment.content,
-            writer_nickname=comment.writer_nickname,
-            writer_id=comment.writer_id,
-            like_count=comment.like_count,
-            created_at=comment.created_at,
-            collected_at=comment.collected_at
+            id=comment['id'],
+            platform_id=comment['platform_id'],
+            community_article_id=comment['community_article_id'],
+            community_id=comment.get('community_id', 1),  # 기본값 설정
+            comment_id=comment['community_comment_id'],  # 필드명 수정
+            parent_comment_id=comment['parent_comment_id'],
+            content=comment['content'],
+            writer_nickname=comment['writer_nickname'],
+            writer_id=comment['writer_id'],
+            like_count=comment.get('like_count', 0),  # 기본값 설정
+            created_at=comment['created_at'],
+            collected_at=comment['collected_at']
         )
         
     except HTTPException:

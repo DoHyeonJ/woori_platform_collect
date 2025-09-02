@@ -7,6 +7,8 @@ class PlatformType(str, Enum):
     """플랫폼 타입"""
     GANGNAMUNNI = "gangnamunni"
     BABITALK = "babitalk"
+    BABITALK_TALK = "babitalk_talk"
+    BABITALK_EVENT_ASK = "babitalk_event_ask"
     NAVER = "naver"
 
 class GangnamUnniCategory(str, Enum):

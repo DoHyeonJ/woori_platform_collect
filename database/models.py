@@ -227,41 +227,45 @@ class DatabaseManager:
             "category_statistics": {}
         }
     
-    def get_articles_by_filters(self, filters: Dict, limit: int = 20, offset: int = 0) -> List[Article]:
+    def get_articles_by_filters(self, filters: Dict, limit: int = 20, offset: int = 0) -> List[Dict]:
         """필터 조건에 따라 게시글을 조회합니다."""
-        return []  # 임시 반환값
+        return self._sqlalchemy_manager.get_articles_by_filters(filters, limit, offset)
     
     def get_articles_count_by_filters(self, filters: Dict) -> int:
         """필터 조건에 따른 게시글 수를 반환합니다."""
-        return 0  # 임시 반환값
+        return self._sqlalchemy_manager.get_articles_count_by_filters(filters)
     
-    def get_reviews_by_filters(self, filters: Dict, limit: int = 20, offset: int = 0) -> List[Review]:
+    def get_reviews_by_filters(self, filters: Dict, limit: int = 20, offset: int = 0) -> List[Dict]:
         """필터 조건에 따라 후기를 조회합니다."""
-        return []  # 임시 반환값
+        return self._sqlalchemy_manager.get_reviews_by_filters(filters, limit, offset)
     
     def get_reviews_count_by_filters(self, filters: Dict) -> int:
         """필터 조건에 따른 후기 수를 반환합니다."""
-        return 0  # 임시 반환값
+        return self._sqlalchemy_manager.get_reviews_count_by_filters(filters)
     
-    def get_comments_by_filters(self, filters: Dict, limit: int = 20, offset: int = 0) -> List[Comment]:
+    def get_comments_by_filters(self, filters: Dict, limit: int = 20, offset: int = 0) -> List[Dict]:
         """필터 조건에 따라 댓글을 조회합니다."""
-        return []  # 임시 반환값
+        return self._sqlalchemy_manager.get_comments_by_filters(filters, limit, offset)
     
     def get_comments_count_by_filters(self, filters: Dict) -> int:
         """필터 조건에 따른 댓글 수를 반환합니다."""
-        return 0  # 임시 반환값
+        return self._sqlalchemy_manager.get_comments_count_by_filters(filters)
     
-    def get_article_by_id(self, article_id: int) -> Optional[Article]:
+    def get_article_by_id(self, article_id: int) -> Optional[Dict]:
         """ID로 게시글을 조회합니다."""
-        return None  # 임시 반환값
+        return self._sqlalchemy_manager.get_article_by_id(article_id)
     
     def get_article_by_platform_id_and_community_article_id(self, platform_id: str, community_article_id: str) -> Optional[Dict]:
         """플랫폼 ID와 커뮤니티 게시글 ID로 게시글 조회"""
         return self._sqlalchemy_manager.get_article_by_platform_id_and_community_article_id(platform_id, community_article_id)
     
-    def get_review_by_id(self, review_id: int) -> Optional[Review]:
+    def get_review_by_id(self, review_id: int) -> Optional[Dict]:
         """ID로 후기를 조회합니다."""
-        return None  # 임시 반환값
+        return self._sqlalchemy_manager.get_review_by_id(review_id)
+    
+    def get_comment_by_id(self, comment_id: int) -> Optional[Dict]:
+        """ID로 댓글을 조회합니다."""
+        return self._sqlalchemy_manager.get_comment_by_id(comment_id)
     
     def get_platform_statistics(self, platform_id: str) -> Dict:
         """특정 플랫폼의 통계를 반환합니다."""
