@@ -11,6 +11,12 @@ load_dotenv()
 # 로거 설정
 logger = logging.getLogger(__name__)
 
+# SQLAlchemy 로깅 레벨 조정 (SQL 쿼리 로그 최소화)
+logging.getLogger('sqlalchemy.engine').setLevel(logging.WARNING)
+logging.getLogger('sqlalchemy.dialects').setLevel(logging.WARNING)
+logging.getLogger('sqlalchemy.pool').setLevel(logging.WARNING)
+logging.getLogger('sqlalchemy.orm').setLevel(logging.WARNING)
+
 # Base 클래스 생성
 Base = declarative_base()
 
@@ -21,9 +27,15 @@ class DatabaseConfig:
         self.apps_env = os.getenv("APPS_ENV", "local")
         self.db_type = os.getenv("DB_TYPE", "sqlite")
         self.db_url = self._get_database_url()
+        # SQL 쿼리 로깅 설정 (개발 환경에서만 활성화)
+        enable_sql_logging = (
+            os.getenv("ENVIRONMENT", "development") == "development" and 
+            os.getenv("SQL_LOGGING", "false").lower() == "true"
+        )
+        
         self.engine = create_engine(
             self.db_url,
-            echo=os.getenv("ENVIRONMENT", "development") == "development",
+            echo=enable_sql_logging,  # 환경변수로 제어 가능
             pool_pre_ping=True if self.db_type == "mysql" else False
         )
         self.SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=self.engine)

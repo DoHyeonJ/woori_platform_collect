@@ -202,35 +202,74 @@ class SQLAlchemyDatabaseManager:
     
     # Comment 관련 메서드
     def insert_comment(self, comment_data: Dict) -> int:
-        """댓글 추가"""
+        """댓글 추가 (중복 체크 포함)"""
         session = self.get_session()
         try:
-            # 해당 게시글 찾기
-            article = session.query(Article).filter(
-                and_(
-                    Article.platform_id == comment_data['platform_id'],
-                    Article.community_article_id == comment_data['community_article_id']
-                )
-            ).first()
+            # article_id가 직접 제공된 경우 (추천 방식)
+            if 'article_id' in comment_data and comment_data['article_id']:
+                article_id = comment_data['article_id']
+                
+                # article이 존재하는지 확인
+                article = session.query(Article).filter(Article.id == article_id).first()
+                if not article:
+                    raise ValueError(f"article_id {article_id}에 해당하는 게시글을 찾을 수 없습니다.")
+                
+                platform_id = article.platform_id
+                community_article_id = article.community_article_id
+                
+            else:
+                # 레거시 방식: platform_id와 community_article_id로 검색
+                if 'platform_id' not in comment_data or 'community_article_id' not in comment_data:
+                    raise ValueError("article_id 또는 (platform_id, community_article_id)가 필요합니다.")
+                
+                platform_id = comment_data['platform_id']
+                community_article_id = comment_data['community_article_id']
+                
+                # 해당 게시글 찾기
+                article = session.query(Article).filter(
+                    and_(
+                        Article.platform_id == platform_id,
+                        Article.community_article_id == community_article_id
+                    )
+                ).first()
+                
+                if not article:
+                    raise ValueError(f"플랫폼 ID '{platform_id}', 게시글 ID '{community_article_id}'에 해당하는 게시글을 찾을 수 없습니다.")
+                
+                article_id = article.id
             
-            if not article:
-                raise ValueError("해당 게시글을 찾을 수 없습니다.")
+            # 댓글 중복 체크
+            community_comment_id = comment_data.get('community_comment_id', '')
+            if community_comment_id:
+                existing_comment = session.query(Comment).filter(
+                    and_(
+                        Comment.platform_id == platform_id,
+                        Comment.community_comment_id == community_comment_id
+                    )
+                ).first()
+                
+                if existing_comment:
+                    logger.info(f"댓글이 이미 존재합니다: {community_comment_id}")
+                    return existing_comment.id
             
+            # 새 댓글 생성
             comment = Comment(
-                platform_id=comment_data['platform_id'],
-                community_article_id=comment_data['community_article_id'],
-                community_comment_id=comment_data['community_comment_id'],
+                platform_id=platform_id,
+                community_article_id=community_article_id,
+                community_comment_id=community_comment_id,
                 content=comment_data['content'],
                 writer_nickname=comment_data['writer_nickname'],
                 writer_id=comment_data['writer_id'],
                 created_at=comment_data.get('created_at', datetime.now()),
                 parent_comment_id=comment_data.get('parent_comment_id'),
                 collected_at=comment_data.get('collected_at', datetime.now()),
-                article_id=article.id
+                article_id=article_id
             )
             session.add(comment)
             session.commit()
+            logger.info(f"댓글 저장 완료: ID {comment.id}, 게시글 ID {article_id}")
             return comment.id
+            
         except Exception as e:
             session.rollback()
             logger.error(f"댓글 추가 중 오류 발생: {e}")
@@ -250,9 +289,31 @@ class SQLAlchemyDatabaseManager:
             if "community_article_id" in filters:
                 query = query.filter(Comment.community_article_id == filters["community_article_id"])
             
+            if "article_id" in filters:
+                query = query.filter(Comment.article_id == filters["article_id"])
+            
             comments = query.order_by(desc(Comment.created_at)).offset(offset).limit(limit).all()
             
             return [self._comment_to_dict(comment) for comment in comments]
+        finally:
+            session.close()
+    
+    def get_comment_by_id(self, comment_id: int) -> Optional[Dict]:
+        """ID로 댓글 조회"""
+        session = self.get_session()
+        try:
+            comment = session.query(Comment).filter(Comment.id == comment_id).first()
+            if comment:
+                return self._comment_to_dict(comment)
+            return None
+        finally:
+            session.close()
+    
+    def get_comments_count_by_article_id(self, article_id: int) -> int:
+        """특정 게시글의 댓글 수 조회"""
+        session = self.get_session()
+        try:
+            return session.query(Comment).filter(Comment.article_id == article_id).count()
         finally:
             session.close()
     
@@ -389,7 +450,11 @@ class SQLAlchemyDatabaseManager:
             'writer_id': comment.writer_id,
             'created_at': comment.created_at.isoformat() if comment.created_at else None,
             'parent_comment_id': comment.parent_comment_id,
-            'collected_at': comment.collected_at.isoformat() if comment.collected_at else None
+            'collected_at': comment.collected_at.isoformat() if comment.collected_at else None,
+            'article_id': comment.article_id,  # 관계 정보 추가
+            # 연관 게시글 정보 (선택적으로 포함)
+            'article_title': comment.article.title if comment.article else None,
+            'article_platform_id': comment.article.platform_id if comment.article else None
         }
     
     def _review_to_dict(self, review: Review) -> Dict:

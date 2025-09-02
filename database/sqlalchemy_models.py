@@ -77,7 +77,6 @@ class Article(Base):
 class Comment(Base):
     """댓글 테이블"""
     __tablename__ = "comments"
-    __table_args__ = {'mysql_charset': 'utf8mb4', 'mysql_collate': 'utf8mb4_unicode_ci'}
     
     id = Column(Integer, primary_key=True, autoincrement=True)
     platform_id = Column(String(50), nullable=False)
@@ -90,16 +89,21 @@ class Comment(Base):
     parent_comment_id = Column(String(255))  # 대댓글인 경우 부모 댓글 ID
     collected_at = Column(DateTime, default=func.now())
     
-    # 외래키 설정 (복합 외래키)
-    article_id = Column(Integer, ForeignKey("articles.id"))
+    # 외래키 설정 - Article과의 관계 (CASCADE 설정으로 데이터 일관성 보장)
+    article_id = Column(Integer, ForeignKey("articles.id", ondelete="CASCADE"), nullable=False)
     
     # 관계 설정
     article = relationship("Article", back_populates="comments")
     
-    # 인덱스 설정
+    # 인덱스 설정 (성능 최적화)
     __table_args__ = (
+        Index('idx_comments_article_id', 'article_id'),
         Index('idx_comments_platform_article', 'platform_id', 'community_article_id'),
         Index('idx_comments_parent_id', 'parent_comment_id'),
+        Index('idx_comments_created_at', 'created_at'),
+        # 복합 인덱스로 댓글 중복 방지
+        Index('idx_comments_unique', 'platform_id', 'community_comment_id', unique=True),
+        {'mysql_charset': 'utf8mb4', 'mysql_collate': 'utf8mb4_unicode_ci'}
     )
     
     def __repr__(self):

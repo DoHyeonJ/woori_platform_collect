@@ -524,11 +524,11 @@ class NaverDataCollector(LoggedClass):
                         self.log_info(f"댓글 {comment['comment_id']}는 이미 저장되어 있습니다")
                         continue
                     
-                    # Comment 객체 생성 (기존 테이블 구조에 맞춤)
+                    # Comment 객체 생성 - 개선된 방식 사용
                     from database.models import Comment
                     db_comment = Comment(
-                        id=None,
-                        article_id=str(db_article_id),  # articles 테이블의 id
+                        id=comment['comment_id'],  # 네이버 댓글 ID
+                        article_id=db_article_id,  # 데이터베이스의 article ID (숫자)
                         content=comment['content'],
                         writer_nickname=comment['writer_nickname'],
                         writer_id=comment['writer_id'] or comment['writer_member_key'],
@@ -536,6 +536,9 @@ class NaverDataCollector(LoggedClass):
                         parent_comment_id=None,  # 대댓글은 현재 지원하지 않음
                         collected_at=datetime.now()
                     )
+                    
+                    # 플랫폼 정보 추가
+                    db_comment.platform_id = f"naver_cafe_{cafe_id}"
                     
                     # 데이터베이스에 저장
                     comment_id = self.db.insert_comment(db_comment)

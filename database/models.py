@@ -132,17 +132,31 @@ class DatabaseManager:
     
     def insert_comment(self, comment: Comment) -> int:
         """댓글 추가"""
-        comment_data = {
-            "platform_id": "legacy",  # 기본값
-            "community_article_id": comment.article_id,
-            "community_comment_id": str(comment.id or ""),
-            "content": comment.content,
-            "writer_nickname": comment.writer_nickname,
-            "writer_id": comment.writer_id,
-            "created_at": comment.created_at,
-            "parent_comment_id": comment.parent_comment_id,
-            "collected_at": comment.collected_at or datetime.now()
-        }
+        # article_id가 숫자인 경우 직접 사용 (추천 방식)
+        if hasattr(comment, 'article_id') and str(comment.article_id).isdigit():
+            comment_data = {
+                "article_id": int(comment.article_id),
+                "community_comment_id": str(comment.id or ""),
+                "content": comment.content,
+                "writer_nickname": comment.writer_nickname,
+                "writer_id": comment.writer_id,
+                "created_at": comment.created_at,
+                "parent_comment_id": comment.parent_comment_id,
+                "collected_at": comment.collected_at or datetime.now()
+            }
+        else:
+            # 레거시 방식 - platform_id와 community_article_id 사용
+            comment_data = {
+                "platform_id": getattr(comment, 'platform_id', 'legacy'),
+                "community_article_id": comment.article_id,
+                "community_comment_id": str(comment.id or ""),
+                "content": comment.content,
+                "writer_nickname": comment.writer_nickname,
+                "writer_id": comment.writer_id,
+                "created_at": comment.created_at,
+                "parent_comment_id": comment.parent_comment_id,
+                "collected_at": comment.collected_at or datetime.now()
+            }
         return self._sqlalchemy_manager.insert_comment(comment_data)
     
     def insert_review(self, review: Review) -> int:

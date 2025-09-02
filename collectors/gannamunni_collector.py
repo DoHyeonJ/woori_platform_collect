@@ -339,17 +339,20 @@ class GangnamUnniDataCollector(LoggedClass):
                 except ValueError:
                     created_at = datetime.now()
                 
-                # 댓글 저장
+                # 댓글 저장 - 개선된 방식 사용
                 db_comment = DBComment(
-                    id=None,
-                    article_id=article_id,
+                    id=str(comment.id),  # 강남언니 댓글 ID
+                    article_id=article_id,  # 데이터베이스의 article ID (숫자)
                     content=comment.contents,
                     writer_nickname=comment.writer.nickname,
                     writer_id=str(comment.writer.id),
                     created_at=created_at,
-                    parent_comment_id=comment.reply_comment_id,
-                    collected_at=datetime.now()  # 수집 시간 기록
+                    parent_comment_id=str(comment.reply_comment_id) if comment.reply_comment_id else None,
+                    collected_at=datetime.now()
                 )
+                
+                # 플랫폼 정보 추가
+                db_comment.platform_id = "gangnamunni"
                 
                 self.db.insert_comment(db_comment)
                 saved_count += 1
