@@ -14,6 +14,7 @@
 - [사용 예시](#사용-예시)
 - [문제 해결](#문제-해결)
 - [기여 가이드](#기여-가이드)
+- [문서 목록](#문서-목록)
 
 ## 🎯 시스템 개요
 
@@ -339,20 +340,41 @@ POST /collection/collect/naver
 
 #### 게시글 목록 조회
 ```http
-GET /viewer/articles?platform_id=naver&limit=20&offset=0
+GET /data/articles?platform=naver&page=1&limit=20
 ```
 
 #### 댓글 목록 조회
 ```http
-GET /viewer/comments?platform_id=naver&limit=20&offset=0
+GET /data/comments?platform=naver&page=1&limit=20
+```
+
+#### 후기 목록 조회
+```http
+GET /data/reviews?platform=gangnamunni&page=1&limit=20
 ```
 
 #### 통계 조회
 ```http
-GET /viewer/statistics/summary
+GET /data/statistics/summary
 ```
 
-### 3. 게시판 정보 API
+### 3. 키워드 검색 API ⭐ NEW
+
+#### 통합 키워드 검색
+```http
+GET /data/search?keywords=성형,눈&platforms=gangnamunni,babitalk&data_types=article,comment,review&start_date=2024-01-01&end_date=2024-12-31&page=1&limit=20
+```
+
+**주요 기능**:
+- 🔍 **다중 키워드 검색**: 콤마로 구분된 여러 키워드 동시 검색
+- 🏢 **플랫폼 필터**: 특정 플랫폼만 선택하여 검색
+- 📅 **날짜 범위**: 시작일/종료일로 검색 기간 제한
+- 📊 **데이터 타입 필터**: 게시글/댓글/후기 선택적 검색
+- 📄 **페이지네이션**: 대용량 데이터 효율적 처리
+
+**상세 가이드**: [키워드 검색 API 가이드](docs/KEYWORD_SEARCH_API_GUIDE.md)
+
+### 4. 게시판 정보 API
 
 #### 네이버 게시판 목록
 ```http
@@ -408,8 +430,9 @@ GET /content/naver/{cafe_id}?menu_id=38&per_page=20
 
 ## 💡 사용 예시
 
-### 1. 네이버 오늘 게시글 수집
+### 1. 데이터 수집
 
+#### 네이버 오늘 게시글 수집
 ```bash
 curl -X POST "http://localhost:8000/api/v1/collection/collect/naver" \
   -H "Content-Type: application/json" \
@@ -420,8 +443,7 @@ curl -X POST "http://localhost:8000/api/v1/collection/collect/naver" \
   }'
 ```
 
-### 2. 바비톡 시술후기 수집
-
+#### 바비톡 시술후기 수집
 ```bash
 curl -X POST "http://localhost:8000/api/v1/collection/collect/babitalk" \
   -H "Content-Type: application/json" \
@@ -431,8 +453,7 @@ curl -X POST "http://localhost:8000/api/v1/collection/collect/babitalk" \
   }'
 ```
 
-### 3. 강남언니 후기 수집
-
+#### 강남언니 후기 수집
 ```bash
 curl -X POST "http://localhost:8000/api/v1/collection/collect/gannamunni" \
   -H "Content-Type: application/json" \
@@ -440,6 +461,40 @@ curl -X POST "http://localhost:8000/api/v1/collection/collect/gannamunni" \
     "category": "review",
     "limit": 30
   }'
+```
+
+### 2. 데이터 조회
+
+#### 게시글 목록 조회
+```bash
+curl -X GET "http://localhost:8000/api/v1/data/articles?platform=gangnamunni&page=1&limit=10"
+```
+
+#### 통계 정보 조회
+```bash
+curl -X GET "http://localhost:8000/api/v1/data/statistics/summary"
+```
+
+### 3. 키워드 검색 ⭐ NEW
+
+#### 기본 키워드 검색
+```bash
+curl -X GET "http://localhost:8000/api/v1/data/search?keywords=성형"
+```
+
+#### 다중 키워드 + 플랫폼 필터
+```bash
+curl -X GET "http://localhost:8000/api/v1/data/search?keywords=성형,눈,코&platforms=gangnamunni,babitalk"
+```
+
+#### 날짜 범위 + 데이터 타입 필터
+```bash
+curl -X GET "http://localhost:8000/api/v1/data/search?keywords=성형&start_date=2024-01-01&end_date=2024-12-31&data_types=article,review"
+```
+
+#### 모든 필터 조합
+```bash
+curl -X GET "http://localhost:8000/api/v1/data/search?keywords=성형,눈&platforms=gangnamunni&data_types=article,comment&start_date=2024-01-01&end_date=2024-12-31&page=1&limit=50"
 ```
 
 ## 🔧 문제 해결
@@ -539,6 +594,25 @@ test: 테스트 추가/수정
 chore: 빌드 프로세스 또는 보조 도구 변경
 ```
 
+## 📚 문서 목록
+
+### API 가이드
+- [키워드 검색 API 가이드](docs/KEYWORD_SEARCH_API_GUIDE.md) ⭐ NEW
+- [API 상세 참조](docs/API_REFERENCE_DETAILED.md)
+- [API 사용 가이드](docs/API_USAGE_GUIDE.md)
+- [비동기 수집 가이드](docs/ASYNC_COLLECTION_GUIDE.md)
+
+### 데이터베이스 관련
+- [데이터베이스 마이그레이션](docs/DATABASE_MIGRATION.md)
+- [MySQL 마이그레이션](docs/MYSQL_MIGRATION_GUIDE.md)
+
+### 외부 API 연동
+- [외부 API 가이드](docs/EXTERNAL_API_GUIDE.md)
+
+### 프로젝트 정보
+- [프로젝트 구조](docs/PROJECT_STRUCTURE.md)
+- [빠른 시작 가이드](docs/QUICK_START_GUIDE.md)
+
 ## 📞 지원 및 문의
 
 ### 문제 신고
@@ -567,5 +641,5 @@ chore: 빌드 프로세스 또는 보조 도구 변경
 
 ---
 
-**마지막 업데이트**: 2025년 8월 15일
-**버전**: 1.0.0
+**마지막 업데이트**: 2025년 1월 15일
+**버전**: 1.1.0

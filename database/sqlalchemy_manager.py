@@ -1,5 +1,5 @@
 from sqlalchemy.orm import Session
-from sqlalchemy import and_, func, desc, text
+from sqlalchemy import and_, or_, func, desc, text
 from database.config import db_config
 from database.sqlalchemy_models import (
     Community, Client, Article, Comment, ExcludedArticle, Review
@@ -558,6 +558,217 @@ class SQLAlchemyDatabaseManager:
         except Exception as e:
             session.rollback()
             logger.error(f"댓글 조회 실패: {e}")
+            raise
+        finally:
+            session.close()
+    
+    def search_data_by_keywords(self, keywords: List[str], platforms: List[str] = None, 
+                               data_types: List[str] = None, start_date: str = None, 
+                               end_date: str = None, limit: int = 100, offset: int = 0) -> Dict[str, List[Dict]]:
+        """키워드로 게시글, 댓글, 후기를 검색합니다."""
+        session = self.get_session()
+        try:
+            results = {
+                'articles': [],
+                'comments': [],
+                'reviews': []
+            }
+            
+            if not keywords:
+                return results
+            
+            # 게시글 검색
+            if not data_types or 'article' in data_types:
+                article_query = session.query(Article)
+                
+                # 게시글용 키워드 조건 (title과 content 모두 검색)
+                article_keyword_conditions = []
+                for keyword in keywords:
+                    article_keyword_conditions.append(
+                        or_(
+                            Article.title.like(f'%{keyword}%'),
+                            Article.content.like(f'%{keyword}%')
+                        )
+                    )
+                
+                if article_keyword_conditions:
+                    article_query = article_query.filter(or_(*article_keyword_conditions))
+                
+                if platforms:
+                    article_query = article_query.filter(Article.platform_id.in_(platforms))
+                
+                if start_date:
+                    article_query = article_query.filter(func.date(Article.created_at) >= start_date)
+                
+                if end_date:
+                    article_query = article_query.filter(func.date(Article.created_at) <= end_date)
+                
+                articles = article_query.order_by(desc(Article.created_at)).offset(offset).limit(limit).all()
+                results['articles'] = [self._article_to_dict(article) for article in articles]
+            
+            # 댓글 검색
+            if not data_types or 'comment' in data_types:
+                comment_query = session.query(Comment)
+                
+                # 댓글용 키워드 조건 (content만 검색, title 없음)
+                comment_keyword_conditions = []
+                for keyword in keywords:
+                    comment_keyword_conditions.append(
+                        Comment.content.like(f'%{keyword}%')
+                    )
+                
+                if comment_keyword_conditions:
+                    comment_query = comment_query.filter(or_(*comment_keyword_conditions))
+                
+                if platforms:
+                    comment_query = comment_query.filter(Comment.platform_id.in_(platforms))
+                
+                if start_date:
+                    comment_query = comment_query.filter(func.date(Comment.created_at) >= start_date)
+                
+                if end_date:
+                    comment_query = comment_query.filter(func.date(Comment.created_at) <= end_date)
+                
+                comments = comment_query.order_by(desc(Comment.created_at)).offset(offset).limit(limit).all()
+                results['comments'] = [self._comment_to_dict(comment) for comment in comments]
+            
+            # 후기 검색
+            if not data_types or 'review' in data_types:
+                review_query = session.query(Review)
+                
+                # 후기용 키워드 조건 (title과 content 모두 검색)
+                review_keyword_conditions = []
+                for keyword in keywords:
+                    review_keyword_conditions.append(
+                        or_(
+                            Review.title.like(f'%{keyword}%'),
+                            Review.content.like(f'%{keyword}%')
+                        )
+                    )
+                
+                if review_keyword_conditions:
+                    review_query = review_query.filter(or_(*review_keyword_conditions))
+                
+                if platforms:
+                    review_query = review_query.filter(Review.platform_id.in_(platforms))
+                
+                if start_date:
+                    review_query = review_query.filter(func.date(Review.created_at) >= start_date)
+                
+                if end_date:
+                    review_query = review_query.filter(func.date(Review.created_at) <= end_date)
+                
+                reviews = review_query.order_by(desc(Review.created_at)).offset(offset).limit(limit).all()
+                results['reviews'] = [self._review_to_dict(review) for review in reviews]
+            
+            return results
+            
+        except Exception as e:
+            logger.error(f"키워드 검색 중 오류 발생: {e}")
+            raise
+        finally:
+            session.close()
+    
+    def search_data_count_by_keywords(self, keywords: List[str], platforms: List[str] = None, 
+                                     data_types: List[str] = None, start_date: str = None, 
+                                     end_date: str = None) -> Dict[str, int]:
+        """키워드 검색 결과의 개수를 반환합니다."""
+        session = self.get_session()
+        try:
+            counts = {
+                'articles': 0,
+                'comments': 0,
+                'reviews': 0
+            }
+            
+            if not keywords:
+                return counts
+            
+            # 게시글 개수
+            if not data_types or 'article' in data_types:
+                article_query = session.query(Article)
+                
+                # 게시글용 키워드 조건 (title과 content 모두 검색)
+                article_keyword_conditions = []
+                for keyword in keywords:
+                    article_keyword_conditions.append(
+                        or_(
+                            Article.title.like(f'%{keyword}%'),
+                            Article.content.like(f'%{keyword}%')
+                        )
+                    )
+                
+                if article_keyword_conditions:
+                    article_query = article_query.filter(or_(*article_keyword_conditions))
+                
+                if platforms:
+                    article_query = article_query.filter(Article.platform_id.in_(platforms))
+                
+                if start_date:
+                    article_query = article_query.filter(func.date(Article.created_at) >= start_date)
+                
+                if end_date:
+                    article_query = article_query.filter(func.date(Article.created_at) <= end_date)
+                
+                counts['articles'] = article_query.count()
+            
+            # 댓글 개수
+            if not data_types or 'comment' in data_types:
+                comment_query = session.query(Comment)
+                
+                # 댓글용 키워드 조건 (content만 검색, title 없음)
+                comment_keyword_conditions = []
+                for keyword in keywords:
+                    comment_keyword_conditions.append(
+                        Comment.content.like(f'%{keyword}%')
+                    )
+                
+                if comment_keyword_conditions:
+                    comment_query = comment_query.filter(or_(*comment_keyword_conditions))
+                
+                if platforms:
+                    comment_query = comment_query.filter(Comment.platform_id.in_(platforms))
+                
+                if start_date:
+                    comment_query = comment_query.filter(func.date(Comment.created_at) >= start_date)
+                
+                if end_date:
+                    comment_query = comment_query.filter(func.date(Comment.created_at) <= end_date)
+                
+                counts['comments'] = comment_query.count()
+            
+            # 후기 개수
+            if not data_types or 'review' in data_types:
+                review_query = session.query(Review)
+                
+                # 후기용 키워드 조건 (title과 content 모두 검색)
+                review_keyword_conditions = []
+                for keyword in keywords:
+                    review_keyword_conditions.append(
+                        or_(
+                            Review.title.like(f'%{keyword}%'),
+                            Review.content.like(f'%{keyword}%')
+                        )
+                    )
+                
+                if review_keyword_conditions:
+                    review_query = review_query.filter(or_(*review_keyword_conditions))
+                
+                if platforms:
+                    review_query = review_query.filter(Review.platform_id.in_(platforms))
+                
+                if start_date:
+                    review_query = review_query.filter(func.date(Review.created_at) >= start_date)
+                
+                if end_date:
+                    review_query = review_query.filter(func.date(Review.created_at) <= end_date)
+                
+                counts['reviews'] = review_query.count()
+            
+            return counts
+            
+        except Exception as e:
+            logger.error(f"키워드 검색 개수 조회 중 오류 발생: {e}")
             raise
         finally:
             session.close()

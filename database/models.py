@@ -294,3 +294,19 @@ class DatabaseManager:
         """데이터베이스 연결을 반환합니다."""
         from database.config import get_db
         return get_db()
+    
+    def search_data_by_keywords(self, keywords: List[str], platforms: List[str] = None, 
+                               data_types: List[str] = None, start_date: str = None, 
+                               end_date: str = None, limit: int = 100, offset: int = 0) -> Dict[str, List[Dict]]:
+        """키워드로 게시글, 댓글, 후기를 검색합니다."""
+        return self._sqlalchemy_manager.search_data_by_keywords(
+            keywords, platforms, data_types, start_date, end_date, limit, offset
+        )
+    
+    def search_data_count_by_keywords(self, keywords: List[str], platforms: List[str] = None, 
+                                     data_types: List[str] = None, start_date: str = None, 
+                                     end_date: str = None) -> Dict[str, int]:
+        """키워드 검색 결과의 개수를 반환합니다."""
+        return self._sqlalchemy_manager.search_data_count_by_keywords(
+            keywords, platforms, data_types, start_date, end_date
+        )

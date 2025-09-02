@@ -176,4 +176,28 @@ class Review(BaseModel):
     is_image_blur: bool = Field(False, description="이미지 블러 여부")
     is_certificated_review: bool = Field(False, description="인증 후기 여부")
     created_at: Optional[datetime] = Field(None, description="작성 시간")
-    collected_at: Optional[datetime] = Field(None, description="수집 시간") 
+    collected_at: Optional[datetime] = Field(None, description="수집 시간")
+
+# 검색 관련 모델들
+class SearchRequest(BaseModel):
+    """키워드 검색 요청 모델"""
+    keywords: str = Field(..., description="검색 키워드 (콤마로 구분)")
+    platforms: Optional[List[PlatformType]] = Field(None, description="플랫폼 필터 (다중선택)")
+    data_types: Optional[List[DataType]] = Field(None, description="데이터 타입 필터 (다중선택)")
+    start_date: Optional[str] = Field(None, description="시작 날짜 (YYYY-MM-DD)")
+    end_date: Optional[str] = Field(None, description="종료 날짜 (YYYY-MM-DD)")
+    page: int = Field(1, ge=1, description="페이지 번호")
+    limit: int = Field(20, ge=1, le=1000, description="페이지당 데이터 수")
+
+class SearchResponse(BaseModel):
+    """키워드 검색 응답 모델"""
+    articles: List[Article] = Field(..., description="검색된 게시글 목록")
+    comments: List[Comment] = Field(..., description="검색된 댓글 목록")
+    reviews: List[Review] = Field(..., description="검색된 후기 목록")
+    total_counts: Dict[str, int] = Field(..., description="타입별 총 개수")
+    page: int = Field(..., description="현재 페이지")
+    limit: int = Field(..., description="페이지당 데이터 수")
+    total_pages: int = Field(..., description="전체 페이지 수")
+    has_next: bool = Field(..., description="다음 페이지 존재 여부")
+    has_prev: bool = Field(..., description="이전 페이지 존재 여부")
+    search_info: Dict[str, Any] = Field(..., description="검색 조건 정보") 
