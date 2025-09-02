@@ -165,17 +165,20 @@ class BabitalkAPI(LoggedClass):
         try:
             async with aiohttp.ClientSession(headers=self.headers) as session:
                 # API 엔드포인트
-                url = f"{self.base_url}/v1/review/"
+                url = f"{self.base_url}/v2/reviews"
                 
                 # 파라미터 구성
                 params = {
-                    "service": "SURGERY",
+                    "service": "TREATMENTS",
                     "limit": limit,
                     "sort": sort
                 }
                 
                 if search_after is not None:
                     params["search_after"] = search_after
+
+                print(params)
+                print(url)
                 
                 async with session.get(url, params=params) as response:
                     if response.status != 200:
@@ -212,16 +215,16 @@ class BabitalkAPI(LoggedClass):
             self.log_error(f"📋 상세 에러: {traceback.format_exc()}")
             return [], BabitalkPagination(has_next=False, search_after=None)
     
-    async def get_reviews_by_date(self, target_date: str, limit: int = 24) -> List[BabitalkReview]:
+    async def get_reviews_by_date(self, target_date: str, limit: int = 0) -> List[BabitalkReview]:
         """
-        특정 날짜의 모든 후기를 수집합니다.
+        특정 날짜의 후기를 수집합니다.
         
         Args:
             target_date: 수집할 날짜 (YYYY-MM-DD 형식)
-            limit: 한 페이지당 후기 수 (기본값: 24)
+            limit: 수집할 최대 개수 (0이면 무제한)
         
         Returns:
-            List[BabitalkReview]: 해당 날짜의 모든 후기 목록
+            List[BabitalkReview]: 해당 날짜의 후기 목록
         """
         all_reviews = []
         search_after = 0  # 최신순으로 시작
@@ -229,10 +232,21 @@ class BabitalkAPI(LoggedClass):
         target_date_obj = datetime.strptime(target_date, "%Y-%m-%d")
         
         try:
+            consecutive_404_errors = 0
+            max_404_errors = 5
+            
             while True:
+                # limit 체크 (0이면 무제한)
+                if limit > 0 and len(all_reviews) >= limit:
+                    self.log_info(f"📊 수집 개수 제한 도달: {limit}개")
+                    break
+                
+                # limit이 설정된 경우 페이지당 개수를 limit에 맞춰 조정
+                page_limit = min(24, limit) if limit > 0 else 24
+                
                 # API에서 후기 데이터 가져오기 (최신순)
                 reviews, pagination = await self.get_surgery_reviews(
-                    limit=limit,
+                    limit=page_limit,
                     search_after=search_after,
                     sort="recent"
                 )
@@ -249,6 +263,10 @@ class BabitalkAPI(LoggedClass):
                         review_date = datetime.strptime(review_date_str, "%Y-%m-%d")
                         
                         if review_date.date() == target_date_obj.date():
+                            # limit 체크 (0이면 무제한)
+                            if limit > 0 and len(all_reviews) >= limit:
+                                self.log_info(f"📊 수집 개수 제한 도달: {limit}개")
+                                return all_reviews
                             date_filtered_reviews.append(review)
                         elif review_date.date() < target_date_obj.date():
                             # 과거 날짜를 만나면 더 이상 해당 날짜의 후기가 없으므로 중단
@@ -259,6 +277,11 @@ class BabitalkAPI(LoggedClass):
                 
                 # 필터링된 후기 추가
                 all_reviews.extend(date_filtered_reviews)
+                
+                # limit 체크 (0이면 무제한) - 날짜 필터링 후 체크
+                if limit > 0 and len(all_reviews) >= limit:
+                    self.log_info(f"📊 수집 개수 제한 도달: {limit}개")
+                    break
                 
                 # 다음 페이지 확인
                 if not pagination.has_next or not pagination.search_after:
@@ -273,7 +296,19 @@ class BabitalkAPI(LoggedClass):
             return all_reviews
             
         except Exception as e:
-            self.log_error(f"❌ 날짜별 후기 수집 중 오류 발생: {e}")
+            error_msg = str(e)
+            if "404" in error_msg or "Not Found" in error_msg:
+                consecutive_404_errors += 1
+                self.log_error(f"❌ 404 에러 발생 (연속 {consecutive_404_errors}회): {e}")
+                
+                if consecutive_404_errors >= max_404_errors:
+                    self.log_error(f"🚫 연속 404 에러 {max_404_errors}회 발생. 20분 대기 후 재시도합니다.")
+                    await asyncio.sleep(20 * 60)  # 20분 대기
+                    consecutive_404_errors = 0  # 카운터 리셋
+                else:
+                    await asyncio.sleep(5)  # 5초 대기
+            else:
+                self.log_error(f"❌ 날짜별 후기 수집 중 오류 발생: {e}")
             return all_reviews
     
     # 카테고리별 발품후기 수집을 위한 카테고리 정보
@@ -288,6 +323,11 @@ class BabitalkAPI(LoggedClass):
     }
     
     # 자유톡 서비스별 카테고리 정보
+    TALK_SERVICES = {
+        79: "성형",
+        71: "쁘띠/피부", 
+        72: "일상"
+    }
     TALK_SERVICE_CATEGORIES = {
         79: "성형",
         71: "쁘띠/피부", 
@@ -310,7 +350,7 @@ class BabitalkAPI(LoggedClass):
         try:
             async with aiohttp.ClientSession(headers=self.headers) as session:
                 # API 엔드포인트
-                url = f"{self.base_url}/v1/event_ask_memos/"
+                url = f"{self.base_url}/v2/event-ask-memos"
                 
                 # 파라미터 구성
                 params = {
@@ -358,14 +398,14 @@ class BabitalkAPI(LoggedClass):
             self.log_error(f"📋 상세 에러: {traceback.format_exc()}")
             return [], BabitalkEventAskMemoPagination(has_next=False, search_after=None)
     
-    async def get_event_ask_memos_by_date(self, target_date: str, category_id: int, limit: int = 24) -> List[BabitalkEventAskMemo]:
+    async def get_event_ask_memos_by_date(self, target_date: str, category_id: int, limit: int = 0) -> List[BabitalkEventAskMemo]:
         """
         특정 날짜의 모든 발품후기를 수집합니다.
         
         Args:
             target_date: 수집할 날짜 (YYYY-MM-DD 형식)
             category_id: 카테고리 ID
-            limit: 한 페이지당 후기 수 (기본값: 24)
+            limit: 수집할 최대 개수 (0이면 무제한)
         
         Returns:
             List[BabitalkEventAskMemo]: 해당 날짜의 모든 발품후기 목록
@@ -384,6 +424,8 @@ class BabitalkAPI(LoggedClass):
                     search_after=search_after,
                     sort="recent"
                 )
+
+                print("")
                 
                 if not memos:
                     break
@@ -593,7 +635,7 @@ class BabitalkAPI(LoggedClass):
         try:
             async with aiohttp.ClientSession(headers=self.headers) as session:
                 # API 엔드포인트
-                url = f"{self.base_url}/v1/community/talks"
+                url = f"{self.base_url}/v2/community/talks"
                 
                 # 파라미터 구성
                 params = {
@@ -640,14 +682,14 @@ class BabitalkAPI(LoggedClass):
             self.log_error(f"📋 상세 에러: {traceback.format_exc()}")
             return [], BabitalkTalkPagination(has_next=False, search_after=None)
 
-    async def get_talks_by_date(self, target_date: str, service_id: int, limit: int = 24) -> List[BabitalkTalk]:
+    async def get_talks_by_date(self, target_date: str, service_id: int, limit: int = 0) -> List[BabitalkTalk]:
         """
         특정 날짜의 모든 자유톡을 수집합니다.
         
         Args:
             target_date: 수집할 날짜 (YYYY-MM-DD 형식)
             service_id: 서비스 ID (79: 성형, 71: 쁘띠/피부, 72: 일상)
-            limit: 한 페이지당 게시글 수 (기본값: 24)
+            limit: 수집할 최대 개수 (0이면 무제한)
         
         Returns:
             List[BabitalkTalk]: 해당 날짜의 모든 자유톡 목록
@@ -770,7 +812,7 @@ class BabitalkAPI(LoggedClass):
         try:
             async with aiohttp.ClientSession(headers=self.headers) as session:
                 # API 엔드포인트
-                url = f"{self.base_url}/v1/community/talks/{talk_id}/comments"
+                url = f"{self.base_url}/v2/community/talks/{talk_id}/comments"
                 
                 # 파라미터 구성
                 params = {

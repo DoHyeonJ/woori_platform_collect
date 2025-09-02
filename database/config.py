@@ -37,7 +37,7 @@ class DatabaseConfig:
             password = os.getenv("MYSQL_PASSWORD", "")
             database = os.getenv("MYSQL_DATABASE", "woori_collect")
             
-            return f"mysql+pymysql://{user}:{password}@{host}:{port}/{database}?charset=utf8mb4"
+            return f"mysql+pymysql://{user}:{password}@{host}:{port}/{database}?charset=utf8mb4&collation=utf8mb4_unicode_ci"
         else:
             # SQLite (기본값)
             db_path = os.getenv("DB_PATH", "data/collect_data.db")

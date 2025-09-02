@@ -418,3 +418,24 @@ class SQLAlchemyDatabaseManager:
             'created_at': review.created_at.isoformat() if review.created_at else None,
             'collected_at': review.collected_at.isoformat() if review.collected_at else None
         }
+    
+    def get_comment_by_article_id_and_comment_id(self, article_id: str, comment_id: str) -> Optional[Dict[str, Any]]:
+        """게시글 ID와 댓글 ID로 댓글 조회 (하위 호환성)"""
+        session = self.get_session()
+        try:
+            comment = session.query(Comment).filter(
+                and_(
+                    Comment.community_article_id == article_id,
+                    Comment.community_comment_id == comment_id
+                )
+            ).first()
+            
+            if comment:
+                return self._comment_to_dict(comment)
+            return None
+        except Exception as e:
+            session.rollback()
+            logger.error(f"댓글 조회 실패: {e}")
+            raise
+        finally:
+            session.close()

@@ -8,6 +8,7 @@ from typing import Optional
 class Community(Base):
     """커뮤니티 테이블"""
     __tablename__ = "communities"
+    __table_args__ = {'mysql_charset': 'utf8mb4', 'mysql_collate': 'utf8mb4_unicode_ci'}
     
     id = Column(Integer, primary_key=True, autoincrement=True)
     name = Column(String(255), nullable=False, unique=True)
@@ -24,6 +25,7 @@ class Community(Base):
 class Client(Base):
     """클라이언트(병원) 테이블"""
     __tablename__ = "clients"
+    __table_args__ = {'mysql_charset': 'utf8mb4', 'mysql_collate': 'utf8mb4_unicode_ci'}
     
     id = Column(Integer, primary_key=True, autoincrement=True)
     hospital_name = Column(String(255), nullable=False)
@@ -39,6 +41,7 @@ class Client(Base):
 class Article(Base):
     """게시글 테이블"""
     __tablename__ = "articles"
+    __table_args__ = {'mysql_charset': 'utf8mb4', 'mysql_collate': 'utf8mb4_unicode_ci'}
     
     id = Column(Integer, primary_key=True, autoincrement=True)
     platform_id = Column(String(50), nullable=False)
@@ -74,6 +77,7 @@ class Article(Base):
 class Comment(Base):
     """댓글 테이블"""
     __tablename__ = "comments"
+    __table_args__ = {'mysql_charset': 'utf8mb4', 'mysql_collate': 'utf8mb4_unicode_ci'}
     
     id = Column(Integer, primary_key=True, autoincrement=True)
     platform_id = Column(String(50), nullable=False)
@@ -104,6 +108,7 @@ class Comment(Base):
 class ExcludedArticle(Base):
     """제외된 게시글 테이블"""
     __tablename__ = "excluded_articles"
+    __table_args__ = {'mysql_charset': 'utf8mb4', 'mysql_collate': 'utf8mb4_unicode_ci'}
     
     id = Column(Integer, primary_key=True, autoincrement=True)
     client_id = Column(Integer, ForeignKey("clients.id"), nullable=False)
@@ -120,6 +125,7 @@ class ExcludedArticle(Base):
 class Review(Base):
     """후기 테이블 (통합)"""
     __tablename__ = "reviews"
+    __table_args__ = {'mysql_charset': 'utf8mb4', 'mysql_collate': 'utf8mb4_unicode_ci'}
     
     id = Column(Integer, primary_key=True, autoincrement=True)
     platform_id = Column(String(50), nullable=False)  # "gangnamunni" 또는 "babitalk"

@@ -7,10 +7,10 @@ from database.models import DatabaseManager, Community, Article as DBArticle, Co
 from utils.logger import LoggedClass
 
 class GangnamUnniDataCollector(LoggedClass):
-    def __init__(self, db_path: str = "data/collect_data.db"):
+    def __init__(self):
         super().__init__("GangnamUnniCollector")
         self.api = GangnamUnniAPI()
-        self.db = DatabaseManager(db_path)
+        self.db = DatabaseManager()  # db_path 파라미터 제거
     
     async def collect_articles_by_date(self, target_date: str, category: str = "hospital_question", save_as_reviews: bool = False) -> int:
         """

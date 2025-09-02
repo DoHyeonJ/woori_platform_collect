@@ -18,12 +18,11 @@ from database.models import DatabaseManager, Article
 class NaverDataCollector(LoggedClass):
     """네이버 카페 데이터 수집기"""
     
-    def __init__(self, db_path: str, naver_cookies: str = ""):
+    def __init__(self, naver_cookies: str = ""):
         super().__init__()
-        self.db_path = db_path
         self.naver_cookies = naver_cookies
         self.api = NaverCafeAPI(naver_cookies)
-        self.db = DatabaseManager(db_path)
+        self.db = DatabaseManager()  # db_path 파라미터 제거
         
         # 네이버 커뮤니티 ID (기본값)
         self.naver_community_id = 3  # 네이버 커뮤니티 ID

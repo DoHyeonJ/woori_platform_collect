@@ -153,13 +153,14 @@ class GangnamUnniAPI(LoggedClass):
             # API 실패 시 빈 리스트 반환
             return []
     
-    async def get_articles_by_date(self, target_date: str, category: str = "hospital_question") -> List[Article]:
+    async def get_articles_by_date(self, target_date: str, category: str = "hospital_question", limit: int = 0) -> List[Article]:
         """
-        특정 날짜의 게시글을 모두 수집합니다.
+        특정 날짜의 게시글을 수집합니다.
         
         Args:
             target_date: 수집할 날짜 (YYYY-MM-DD 형식, 예: "2024-01-15")
             category: 카테고리 (기본값: "hospital_question" - 병원질문)
+            limit: 수집할 최대 개수 (0이면 무제한)
         
         Returns:
             List[Article]: 해당 날짜의 게시글 목록
@@ -177,17 +178,27 @@ class GangnamUnniAPI(LoggedClass):
         consecutive_empty_pages = 0  # 연속으로 빈 페이지가 나온 횟수
         max_consecutive_empty = 3  # 최대 연속 빈 페이지 수
         found_target_date = False  # 목표 날짜 게시글을 찾았는지 확인
+        consecutive_404_errors = 0  # 연속 404 에러 횟수
+        max_404_errors = 5  # 최대 연속 404 에러 허용 횟수
         
         while page <= max_pages and consecutive_empty_pages < max_consecutive_empty:
             try:
+                # limit이 설정된 경우 페이지당 개수를 limit에 맞춰 조정
+                page_limit = min(20, limit) if limit > 0 else 20
+                
                 # 현재 페이지의 게시글 가져오기
-                page_articles = await self.get_article_list(category=category, page=page, limit=20)
+                page_articles = await self.get_article_list(category=category, page=page, limit=page_limit)
                 
                 if not page_articles:
                     consecutive_empty_pages += 1
                     page += 1
                     await asyncio.sleep(1)
                     continue
+                
+                # limit 체크 (0이면 무제한) - 페이지 가져오기 전에 체크
+                if limit > 0 and len(all_articles) >= limit:
+                    self.log_info(f"📊 수집 개수 제한 도달: {limit}개")
+                    break
                 
                 # 날짜별 필터링
                 target_date_articles = []
@@ -198,6 +209,10 @@ class GangnamUnniAPI(LoggedClass):
                         article_date = self._parse_article_date(article.create_time)
                         
                         if article_date == target_date_obj:
+                            # limit 체크 (0이면 무제한)
+                            if limit > 0 and len(all_articles) >= limit:
+                                self.log_info(f"📊 수집 개수 제한 도달: {limit}개")
+                                break
                             target_date_articles.append(article)
                             found_target_date = True
                         elif article_date < target_date_obj:
@@ -214,6 +229,11 @@ class GangnamUnniAPI(LoggedClass):
                 # 해당 날짜의 게시글 추가
                 if target_date_articles:
                     all_articles.extend(target_date_articles)
+                    
+                    # limit 체크 (0이면 무제한) - 날짜 필터링 후 체크
+                    if limit > 0 and len(all_articles) >= limit:
+                        self.log_info(f"📊 수집 개수 제한 도달: {limit}개")
+                        break
                 
                 # 더 오래된 게시글이 발견되면 수집 중단
                 if older_articles_found:
@@ -225,7 +245,23 @@ class GangnamUnniAPI(LoggedClass):
                 page += 1
                 
             except Exception as e:
-                break
+                error_msg = str(e)
+                if "404" in error_msg or "Not Found" in error_msg:
+                    consecutive_404_errors += 1
+                    self.log_error(f"❌ 404 에러 발생 (연속 {consecutive_404_errors}회): {e}")
+                    
+                    if consecutive_404_errors >= max_404_errors:
+                        self.log_error(f"🚫 연속 404 에러 {max_404_errors}회 발생. 20분 대기 후 재시도합니다.")
+                        await asyncio.sleep(20 * 60)  # 20분 대기
+                        consecutive_404_errors = 0  # 카운터 리셋
+                    else:
+                        await asyncio.sleep(5)  # 5초 대기
+                else:
+                    self.log_error(f"페이지 {page} 수집 실패: {e}")
+                    consecutive_empty_pages += 1
+                
+                page += 1
+                await asyncio.sleep(2)
         
         return all_articles
     
@@ -259,6 +295,10 @@ class GangnamUnniAPI(LoggedClass):
             List[Comment]: 댓글 목록
         """
         self.log_info(f"        🔍 댓글 수집 시작: 게시글 ID {article_id}")
+        
+        # 게시글별 5초 딜레이 (과부하 방지)
+        await asyncio.sleep(5)
+        
         try:
             async with aiohttp.ClientSession(headers=self.headers) as session:
                 # 게시글 상세 페이지 URL

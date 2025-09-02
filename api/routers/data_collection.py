@@ -159,7 +159,7 @@ async def collect_gannamunni_data(
     start_time = time.time()
     
     try:
-        collector = GangnamUnniDataCollector(db.db_path)
+        collector = GangnamUnniDataCollector()
         
         # 강남언니 데이터 수집
         result = await collector.collect_articles_by_date(
@@ -203,7 +203,7 @@ async def collect_babitalk_data(
     start_time = time.time()
     
     try:
-        collector = BabitalkDataCollector(db.db_path)
+        collector = BabitalkDataCollector()
         
         if request.category == "surgery_review":
             # 시술후기 수집
@@ -336,7 +336,7 @@ async def collect_naver_data(
         logger.info(f"네이버 수집 시작 - 카페: {cafe_id}, 날짜: {target_date}, 게시판: {menu_id}, 제한: {limit}")
         
         # 수집기 생성
-        collector = NaverDataCollector(db.db_path, cookies)
+        collector = NaverDataCollector(cookies)
         
         # target_date가 지정된 경우 날짜별 수집
         if target_date:

@@ -11,7 +11,7 @@ import os
 # 프로젝트 루트 디렉토리를 Python 경로에 추가
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from api.routers import data_collection, data_viewer
+from api.routers import data_collection, data_viewer, async_collection
 from api.dependencies import get_database_manager, get_sqlalchemy_database_manager
 from database.models import DatabaseManager
 from database.config import db_config
@@ -71,6 +71,7 @@ app.add_middleware(
 # 라우터 등록
 app.include_router(data_collection.router, prefix="/api/v1/collection", tags=["데이터 수집"])
 app.include_router(data_viewer.router, prefix="/api/v1/data", tags=["데이터 조회"])
+app.include_router(async_collection.router, prefix="/api/v1", tags=["비동기 수집"])
 
 @app.get("/")
 async def root():

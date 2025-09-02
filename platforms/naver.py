@@ -462,13 +462,26 @@ class NaverCafeAPI(LoggedClass):
             self.log_error(f"게시글 제목과 내용 조회 중 오류 발생: {str(e)}")
             return f"게시글 조회 실패: {str(e)}"
     
-    async def get_articles_with_content_and_comments(self, cafe_id: str, menu_id: str = "", per_page: int = 20, target_date: Optional[str] = None) -> List[Dict[str, Any]]:
-        """게시글 목록, 내용, 댓글을 함께 조회"""
+    async def get_articles_with_content_and_comments(self, cafe_id: str, menu_id: str = "", per_page: int = 20, target_date: Optional[str] = None, limit: int = 0) -> List[Dict[str, Any]]:
+        """
+        게시글 목록, 내용, 댓글을 함께 조회
+        
+        Args:
+            cafe_id: 카페 ID
+            menu_id: 메뉴 ID (기본값: "")
+            per_page: 페이지당 게시글 수 (기본값: 20)
+            target_date: 대상 날짜 (기본값: None)
+            limit: 수집할 최대 개수 (0이면 무제한)
+        """
         try:
             self.log_info(f"게시글과 내용, 댓글 조회 시작 (카페 ID: {cafe_id}, 메뉴 ID: {menu_id}, 날짜: {target_date})")
             
-            # 게시글 목록 조회 (더 많은 게시글을 가져와서 날짜 필터링)
-            initial_per_page = per_page * 4 if target_date else per_page
+            # limit이 설정된 경우 페이지당 개수를 limit에 맞춰 조정
+            if limit > 0:
+                initial_per_page = min(per_page * 4, limit) if target_date else min(per_page, limit)
+            else:
+                initial_per_page = per_page * 4 if target_date else per_page
+            
             articles = await self.get_article_list(cafe_id, menu_id, 1, initial_per_page)
             
             if not articles:
@@ -479,9 +492,20 @@ class NaverCafeAPI(LoggedClass):
             
             # 각 게시글의 내용과 댓글 조회 (생성일 정보 포함)
             articles_with_content_and_comments = []
+            consecutive_404_errors = 0
+            max_404_errors = 5
+            
             for i, article in enumerate(articles):
                 try:
+                    # limit 체크 (0이면 무제한)
+                    if limit > 0 and len(articles_with_content_and_comments) >= limit:
+                        self.log_info(f"📊 수집 개수 제한 도달: {limit}개")
+                        break
+                    
                     self.log_info(f"게시글 {i+1}/{len(articles)} 처리 중... (ID: {article.article_id})")
+                    
+                    # 게시글별 5초 딜레이 (과부하 방지)
+                    await asyncio.sleep(5)
                     
                     # 게시글 내용 조회
                     content_html, created_at = await self.get_article_content(cafe_id, article.article_id)
@@ -513,8 +537,26 @@ class NaverCafeAPI(LoggedClass):
                     # API 호출 간격 조절
                     await asyncio.sleep(0.3)
                     
+                    # limit 체크 (0이면 무제한) - 게시글 처리 후 체크
+                    if limit > 0 and len(articles_with_content_and_comments) >= limit:
+                        self.log_info(f"📊 수집 개수 제한 도달: {limit}개")
+                        break
+                    
                 except Exception as e:
-                    self.log_error(f"게시글 {article.article_id} 처리 실패: {str(e)}")
+                    error_msg = str(e)
+                    if "404" in error_msg or "Not Found" in error_msg:
+                        consecutive_404_errors += 1
+                        self.log_error(f"❌ 404 에러 발생 (연속 {consecutive_404_errors}회): {e}")
+                        
+                        if consecutive_404_errors >= max_404_errors:
+                            self.log_error(f"🚫 연속 404 에러 {max_404_errors}회 발생. 20분 대기 후 재시도합니다.")
+                            await asyncio.sleep(20 * 60)  # 20분 대기
+                            consecutive_404_errors = 0  # 카운터 리셋
+                        else:
+                            await asyncio.sleep(5)  # 5초 대기
+                    else:
+                        self.log_error(f"게시글 {article.article_id} 처리 실패: {str(e)}")
+                    
                     article_data = {
                         'article': article,
                         'comments': [],
