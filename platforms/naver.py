@@ -42,23 +42,19 @@ class NaverCafeAPI(LoggedClass):
         self.naver_cookies = naver_cookies
         self.base_url = "https://apis.naver.com"
         
-        # 쿠키가 있는 경우와 없는 경우를 구분하여 헤더 설정
-        if naver_cookies and naver_cookies.strip() and not naver_cookies.strip().endswith("="):
-            # 실제 쿠키가 있는 경우
-            self.headers = {
-                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36",
-                "Accept": "application/json",
-                "Referer": "https://cafe.naver.com/",
-                "Cookie": naver_cookies
-                # "Cookie": "NNB=FFF5SHN7DBRWQ; ncvid=#vid#_115.138.87.199sJb9; ASID=738a57c700000197c8d289df0000001b; tooltipDisplayed=true; _ga=GA1.1.634635442.1753009737; _ga_451MFZ9CFM=GS2.1.s1753009736$o1$g0$t1753009742$j54$l0$h0; NAC=l62oBswtwjTM; ba.uuid=48f2e2c5-dddf-487d-a97d-8da9db989e0d; SRT30=1755240759; page_uid=j5Jiedqo1SCssj6Dt/Gssssss8G-323926; NACT=1; nid_inf=1746216374; NID_AUT=MCHyhdH1VFJbGSxzN6PZmZD2BCGlfpjvhMG41o3HfJOxL9X7ygxtS+rOFTxjTY9S; NID_SES=AAABnecjmkNj4kc1SzRWcB0iXzq1wJHXTinOpDRkhq/47SQSVq4qzD1jcEIObewjNDkRDpO9ked8Gmx8cuVNKuNVujRj/p5gJXGjZBJ7ydKOOBpw0puRn9vvcRnI3QGm0BMVDoxx9dfcVrWMij+5ipc3HvThF1h/1AXv/2i+yHQlbbp88rx3L/HmQiBylobLi7TeRD4UuGzoGNvwXljPGncBMXJc0Krt1yIitonc6miGgcQCR3wNCJMn+HX0aUuM5UlpxWfELr7ATcm1YyrUN3tsKdJxVmKJssqaHDG7a4P6Dq9IoqMpLqm/hYMZgPY0koYGzvFV5CJHQnDPlUdoGxP2ttBw8wpS5UVv4wywvZKrnK8LCqJgTtilcZZGtws2sjo/2joCu7hsC2ButIJ315KzsnRAatJKKDczZEaZQI1ElHJbTzeUkfBGPROIt+DG4Y2QSNGzNmdSEfs2u9wTlsVJhyPYR42meQbEY6RKk1Ydf7APmHA7hActbWlaKaU4UoOkEiVuuqnjCnWdvPCdsbi/mV6xIkSWZKmwIsSoJee9b7lb; ncu=9ea55e7a663e57d6f3357273f0186f60c1cc1e9e19; nci4=9aac4b68763d52e5bf5116010cf281ef0257a34b6c36f10ac63d6a2887b2029937b468d22d29d796c29cca06bd139b67be90db25d086f7288652e83665c06dc4abadab45d0a7d484a2d2d09a4bdecec085cf86cd8cbfb0c4a816080024033e36262b3d3837363268651d1d3918291b6a6641615c13606f4c6b446278775671420c727d587f4a044a4566417233404f6e497b545b567150622f2223262121252caaa587a29cd2d3bed4d2d2bacbcbc8c8a1cdccc2c0d1; ncmc4=80b651726c2748ffa54b0c1b16f98de84518f410762ceb10dc281bc35c598a64b25ca041b5c6260454ee8d51d57fd806e9e8dac50916492fde; ncvc2=407b80a4b8e0896452b3dbe2dc30453e87c82bd789d630ec14d3ee4bfcf93cc503ed2be12a0493e08b1e4099238403fb3d06303fdeec84ac9a5cfa559b8c11e1818e919d958683ddcfcec8c4c3cfd7d7cddec0dfd3d9dddde6e4e0929eb992a4aca0a3afa3b0b1eff1f2fffbfdf8f18098849f8c868e888c899593e4ebcaedded6d7cac4cadddabaa5a1a7a5afa9ababb7a8aab5bdb7b7b4b1bdbbccc3e2c5f6010e1618190a0f514b4e40415654535c4e514d5c555f5f5f585a63171a3d1c2d27283b343a2f287468767771757a72736d7e6078727b010102000571705772434d425d514050510f11131c17181e1f1905273b262b222b2b2d2f2b64; BUC=ghc1SBQ3TqPu4nUQw4C4xQIXKVzcoaznRlZxJEmHZe0=; JSESSIONID=9F8B509E2B43277D4A6C64511C4E0155"
-            }
+        # 기본 헤더 설정
+        self.headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36",
+            "Accept": "application/json",
+            "Referer": "https://cafe.naver.com/"
+        }
+        
+        # 쿠키가 있는 경우 헤더에 추가
+        if naver_cookies and naver_cookies.strip():
+            self.headers["Cookie"] = naver_cookies.strip()
+            self.log_info(f"네이버 쿠키 설정됨: {naver_cookies[:50]}...")
         else:
-            # 쿠키가 없는 경우 (게시판 목록 조회용)
-            self.headers = {
-                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36",
-                "Accept": "application/json",
-                "Referer": "https://cafe.naver.com/"
-            }
+            self.log_warning("네이버 쿠키가 설정되지 않았습니다. 일부 API 호출이 실패할 수 있습니다.")
         
         # 주요 카페 ID 목록
         self.cafe_ids = {
@@ -166,7 +162,7 @@ class NaverCafeAPI(LoggedClass):
                             
                             for article in articles:
                                 # writeDate를 Unix timestamp (밀리초)에서 datetime으로 변환
-                                created_at = self._convert_write_date(article.get('writeDate'))
+                                created_at = self._convert_write_date(article.get('writeDateTimestamp'))
                                 
                                 article_list.append(NaverCafeArticle(
                                     article_id=article['articleId'],
@@ -688,7 +684,8 @@ class NaverCafeAPI(LoggedClass):
             # Unix timestamp (밀리초)를 초 단위로 변환 후 datetime으로 변환
             timestamp_seconds = int(write_date) / 1000
             created_at = datetime.fromtimestamp(timestamp_seconds)
-            self.log_info(f"생성일 변환 성공: {write_date} -> {created_at}")
+            # 로그를 줄이기 위해 debug 레벨로 변경 (너무 많은 로그 방지)
+            # self.log_info(f"생성일 변환 성공: {write_date} -> {created_at}")
             return created_at
         except (ValueError, TypeError) as e:
             self.log_error(f"생성일 변환 실패: {write_date}, 오류: {str(e)}")

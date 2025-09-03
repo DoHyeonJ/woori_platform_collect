@@ -24,8 +24,37 @@ class NaverDataCollector(LoggedClass):
         self.api = NaverCafeAPI(naver_cookies)
         self.db = DatabaseManager()  # db_path 파라미터 제거
         
-        # 네이버 커뮤니티 ID (기본값)
-        self.naver_community_id = 3  # 네이버 커뮤니티 ID
+        # 네이버 커뮤니티 ID 설정 (존재하지 않으면 생성)
+        self.naver_community_id = self._ensure_naver_community()
+    
+    def _ensure_naver_community(self) -> int:
+        """네이버 커뮤니티가 존재하는지 확인하고, 없으면 생성"""
+        try:
+            # 네이버 커뮤니티 이름으로 조회
+            community_name = "네이버 카페"
+            existing_community = self.db.get_community_by_name(community_name)
+            
+            if existing_community:
+                community_id = existing_community['id']
+                self.log_info(f"기존 네이버 커뮤니티 사용: ID {community_id}")
+                return community_id
+            else:
+                # 커뮤니티 생성
+                from database.models import Community
+                community = Community(
+                    id=None,
+                    name=community_name,
+                    created_at=datetime.now(),
+                    description="네이버 카페 데이터 수집을 위한 커뮤니티"
+                )
+                community_id = self.db.insert_community(community)
+                self.log_info(f"새 네이버 커뮤니티 생성: ID {community_id}")
+                return community_id
+                
+        except Exception as e:
+            self.log_error(f"네이버 커뮤니티 설정 중 오류: {e}")
+            # 기본값 1 사용 (대부분의 DB에서 첫 번째 커뮤니티가 있을 것으로 예상)
+            return 1
     
     async def collect_board_list(self, cafe_id: str) -> List[NaverCafeMenu]:
         """게시판 목록 수집"""
@@ -256,7 +285,7 @@ class NaverDataCollector(LoggedClass):
             
             while True:
                 try:
-                    self.log_info(f"게시글 목록 조회 중... (페이지: {page})")
+                    self.log_info(f"게시글 목록 조회 중... (페이지: {page}) - 대상 날짜: {target_datetime.date()}")
                     
                     articles = await self.api.get_article_list(cafe_id, menu_id, page, per_page)
                     
@@ -264,24 +293,48 @@ class NaverDataCollector(LoggedClass):
                         self.log_info(f"페이지 {page}에서 더 이상 게시글이 없습니다")
                         break
                     
+                    # 현재 페이지의 게시글 날짜 분포 확인
+                    article_dates = []
+                    for article in articles:
+                        if article.created_at:
+                            article_dates.append(article.created_at.date())
+                    
+                    if article_dates:
+                        min_date = min(article_dates)
+                        max_date = max(article_dates)
+                        self.log_info(f"페이지 {page} 게시글 날짜 범위: {min_date} ~ {max_date}")
+                    
                     # 해당 날짜의 게시글만 필터링
                     date_filtered_articles = []
+                    older_than_target = 0  # 대상 날짜보다 오래된 게시글 수
+                    
                     for article in articles:
                         if article.created_at:
                             article_date = article.created_at.date()
                             if article_date == target_datetime.date():
                                 date_filtered_articles.append(article)
+                                self.log_info(f"대상 날짜 게시글 발견: {article.article_id} - {article_date}")
+                            elif article_date < target_datetime.date():
+                                older_than_target += 1
+                        else:
+                            self.log_warning(f"게시글 {article.article_id}의 생성일이 없습니다")
                     
                     if date_filtered_articles:
                         all_articles.extend(date_filtered_articles)
-                        self.log_info(f"페이지 {page}에서 {len(date_filtered_articles)}개 게시글 필터링 완료")
+                        self.log_info(f"페이지 {page}에서 {len(date_filtered_articles)}개 게시글 필터링 완료 (총 {len(all_articles)}개)")
+                    else:
+                        self.log_info(f"페이지 {page}에서 대상 날짜({target_datetime.date()})의 게시글이 없음")
                     
-                    # 마지막 게시글의 생성일이 대상 날짜보다 이전이면 중단
-                    if articles and articles[-1].created_at:
-                        last_article_date = articles[-1].created_at.date()
-                        if last_article_date < target_datetime.date():
-                            self.log_info(f"마지막 게시글 날짜({last_article_date})가 대상 날짜({target_datetime.date()})보다 이전이므로 중단")
-                            break
+                    # 조기 종료 조건 개선
+                    # 1. 전체 게시글이 대상 날짜보다 오래된 경우
+                    if older_than_target > 0 and len(date_filtered_articles) == 0:
+                        self.log_info(f"페이지 {page}에서 대상 날짜보다 오래된 게시글 {older_than_target}개 발견, 검색 중단")
+                        break
+                    
+                    # 2. 너무 많은 페이지를 조회한 경우 (무한 루프 방지)
+                    if page >= 50:  # 최대 50페이지까지만 조회
+                        self.log_warning(f"최대 페이지 수({page})에 도달하여 검색 중단")
+                        break
                     
                     page += 1
                     
