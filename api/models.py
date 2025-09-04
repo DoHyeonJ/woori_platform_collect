@@ -137,6 +137,7 @@ class Article(BaseModel):
     created_at: Optional[datetime] = Field(None, description="작성 시간")
     category_name: Optional[str] = Field(None, description="카테고리명")
     collected_at: Optional[datetime] = Field(None, description="수집 시간")
+    article_url: Optional[str] = Field(None, description="원문 링크")
 
 class Comment(BaseModel):
     """댓글 모델"""
@@ -177,6 +178,7 @@ class Review(BaseModel):
     is_certificated_review: bool = Field(False, description="인증 후기 여부")
     created_at: Optional[datetime] = Field(None, description="작성 시간")
     collected_at: Optional[datetime] = Field(None, description="수집 시간")
+    article_url: Optional[str] = Field(None, description="원문 링크")
 
 # 검색 관련 모델들
 class SearchRequest(BaseModel):

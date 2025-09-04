@@ -481,8 +481,17 @@ async def search_data_by_keywords(
         )
         
         # 응답 데이터 변환
+        from api.utils.url_generator import ArticleURLGenerator
+        
         article_responses = []
         for article in search_results['articles']:
+            # 원문 URL 생성
+            article_url = ArticleURLGenerator.generate_article_url(
+                platform_id=article['platform_id'],
+                community_article_id=article['community_article_id'],
+                category_name=article['category_name']
+            )
+            
             article_responses.append(Article(
                 id=article['id'],
                 platform_id=article['platform_id'],
@@ -498,7 +507,8 @@ async def search_data_by_keywords(
                 images=article['images'],
                 created_at=article['created_at'],
                 category_name=article['category_name'],
-                collected_at=article['collected_at']
+                collected_at=article['collected_at'],
+                article_url=article_url
             ))
         
         comment_responses = []
@@ -520,6 +530,13 @@ async def search_data_by_keywords(
         
         review_responses = []
         for review in search_results['reviews']:
+            # 리뷰 원문 URL 생성
+            review_url = ArticleURLGenerator.generate_review_url(
+                platform_id=review['platform_id'],
+                platform_review_id=review['platform_review_id'],
+                category_name=review.get('categories')
+            )
+            
             review_responses.append(Review(
                 id=review['id'],
                 platform_id=review['platform_id'],
@@ -542,7 +559,8 @@ async def search_data_by_keywords(
                 is_image_blur=review['is_image_blur'],
                 is_certificated_review=review['is_certificated_review'],
                 created_at=review['created_at'],
-                collected_at=review['collected_at']
+                collected_at=review['collected_at'],
+                article_url=review_url
             ))
         
         # 페이지네이션 정보 계산
