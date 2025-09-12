@@ -75,13 +75,12 @@ class BabitalkDataCollector(LoggedClass):
             self.log_error(f"❌ 수집 중 오류 발생: {e}")
             return total_reviews
     
-    async def collect_reviews_by_date(self, target_date: str, limit_per_page: int = 24) -> int:
+    async def collect_reviews_by_date(self, target_date: str) -> int:
         """
         특정 날짜의 바비톡 시술 후기를 수집하고 데이터베이스에 저장합니다.
         
         Args:
             target_date: 수집할 날짜 (YYYY-MM-DD 형식)
-            limit_per_page: 페이지당 후기 수 (기본값: 24)
         
         Returns:
             int: 수집된 후기 수
@@ -94,7 +93,7 @@ class BabitalkDataCollector(LoggedClass):
         
         try:
             # API에서 해당 날짜의 후기 데이터 가져오기
-            reviews = await self.api.get_reviews_by_date(target_date, limit=limit_per_page)
+            reviews = await self.api.get_reviews_by_date(target_date)
             
             if not reviews:
                 self.log_info(f"📭 {target_date} 날짜에 수집할 후기가 없습니다.")
@@ -120,14 +119,13 @@ class BabitalkDataCollector(LoggedClass):
             self.log_error(f"❌ 날짜별 후기 수집 중 오류 발생: {e}")
             return 0
     
-    async def collect_event_ask_memos_by_date(self, target_date: str, category_id: int, limit_per_page: int = 24) -> int:
+    async def collect_event_ask_memos_by_date(self, target_date: str, category_id: int) -> int:
         """
         특정 날짜의 바비톡 발품후기를 수집하고 데이터베이스에 저장합니다.
         
         Args:
             target_date: 수집할 날짜 (YYYY-MM-DD 형식)
             category_id: 카테고리 ID (3000: 눈, 3100: 코, 3200: 지방흡입/이식, 3300: 안면윤곽/양악, 3400: 가슴, 3500: 남자성형, 3600: 기타)
-            limit_per_page: 페이지당 후기 수 (기본값: 24)
         
         Returns:
             int: 수집된 발품후기 수
@@ -140,7 +138,7 @@ class BabitalkDataCollector(LoggedClass):
         
         try:
             # API에서 해당 날짜의 발품후기 데이터 가져오기
-            memos = await self.api.get_event_ask_memos_by_date(target_date, category_id, limit_per_page)
+            memos = await self.api.get_event_ask_memos_by_date(target_date, category_id)
             
             if not memos:
                 self.log_info(f"📭 {target_date} 날짜에 수집할 {category_name} 발품후기가 없습니다.")
@@ -164,13 +162,12 @@ class BabitalkDataCollector(LoggedClass):
             self.log_error(f"❌ 날짜별 발품후기 수집 중 오류 발생: {e}")
             return 0
     
-    async def collect_all_event_ask_memos_by_date(self, target_date: str, limit_per_page: int = 24) -> Dict[int, int]:
+    async def collect_all_event_ask_memos_by_date(self, target_date: str) -> Dict[int, int]:
         """
         특정 날짜의 모든 카테고리 발품후기를 수집하고 데이터베이스에 저장합니다.
         
         Args:
             target_date: 수집할 날짜 (YYYY-MM-DD 형식)
-            limit_per_page: 페이지당 후기 수 (기본값: 24)
         
         Returns:
             Dict[int, int]: 카테고리별 수집된 발품후기 수
@@ -182,7 +179,7 @@ class BabitalkDataCollector(LoggedClass):
         # 모든 카테고리 순회
         for category_id, category_name in self.api.EVENT_ASK_CATEGORIES.items():
             try:
-                count = await self.collect_event_ask_memos_by_date(target_date, category_id, limit_per_page)
+                count = await self.collect_event_ask_memos_by_date(target_date, category_id)
                 results[category_id] = count
                 
                 # 카테고리 간 딜레이 (서버 부하 방지)
@@ -198,14 +195,13 @@ class BabitalkDataCollector(LoggedClass):
         
         return results
     
-    async def collect_talks_by_date(self, target_date: str, service_id: int, limit_per_page: int = 24) -> int:
+    async def collect_talks_by_date(self, target_date: str, service_id: int) -> int:
         """
         특정 날짜의 바비톡 자유톡을 수집하고 데이터베이스에 저장합니다.
         
         Args:
             target_date: 수집할 날짜 (YYYY-MM-DD 형식)
             service_id: 서비스 ID (79: 성형, 71: 쁘띠/피부, 72: 일상)
-            limit_per_page: 페이지당 게시글 수 (기본값: 24)
         
         Returns:
             int: 수집된 자유톡 수
@@ -217,7 +213,7 @@ class BabitalkDataCollector(LoggedClass):
         
         try:
             # API에서 해당 날짜의 자유톡 데이터 가져오기
-            talks = await self.api.get_talks_by_date(target_date, service_id, limit_per_page)
+            talks = await self.api.get_talks_by_date(target_date, service_id)
             
             if not talks:
                 self.log_info(f"📭 {target_date} 날짜의 자유톡이 없습니다.")
@@ -241,13 +237,12 @@ class BabitalkDataCollector(LoggedClass):
             self.log_error(f"❌ 자유톡 수집 중 오류 발생: {e}")
             return 0
     
-    async def collect_all_talks_by_date(self, target_date: str, limit_per_page: int = 24) -> Dict[int, int]:
+    async def collect_all_talks_by_date(self, target_date: str) -> Dict[int, int]:
         """
         특정 날짜의 모든 바비톡 자유톡 카테고리를 수집하고 데이터베이스에 저장합니다.
         
         Args:
             target_date: 수집할 날짜 (YYYY-MM-DD 형식)
-            limit_per_page: 페이지당 게시글 수 (기본값: 24)
         
         Returns:
             Dict[int, int]: 카테고리별 수집된 자유톡 수
@@ -259,7 +254,7 @@ class BabitalkDataCollector(LoggedClass):
         # 모든 자유톡 카테고리 수집
         for service_id, category_name in self.api.TALK_SERVICE_CATEGORIES.items():
             try:
-                count = await self.collect_talks_by_date(target_date, service_id, limit_per_page)
+                count = await self.collect_talks_by_date(target_date, service_id)
                 results[service_id] = count
                 
             except Exception as e:
@@ -324,14 +319,13 @@ class BabitalkDataCollector(LoggedClass):
             print(f"❌ 댓글 수집 중 오류 발생: {e}")
             return 0
     
-    async def collect_comments_for_talks_by_date(self, target_date: str, service_id: int, limit_per_page: int = 24) -> int:
+    async def collect_comments_for_talks_by_date(self, target_date: str, service_id: int) -> int:
         """
         특정 날짜의 자유톡들의 댓글을 수집하고 데이터베이스에 저장합니다.
         
         Args:
             target_date: 수집할 날짜 (YYYY-MM-DD 형식)
             service_id: 서비스 ID (79: 성형, 71: 쁘띠/피부, 72: 일상)
-            limit_per_page: 페이지당 게시글 수 (기본값: 24)
         
         Returns:
             int: 수집된 댓글 수
@@ -340,7 +334,7 @@ class BabitalkDataCollector(LoggedClass):
         
         try:
             # 해당 날짜의 자유톡 데이터 가져오기
-            talks = await self.api.get_talks_by_date(target_date, service_id, limit_per_page)
+            talks = await self.api.get_talks_by_date(target_date, service_id)
             
             if not talks:
                 print(f"📭 {target_date} 날짜의 자유톡이 없습니다.")
@@ -595,7 +589,7 @@ class BabitalkDataCollector(LoggedClass):
                 comment_id = self.db.insert_comment(db_comment)
                 if comment_id:
                     saved_count += 1
-                    self.log_info(f"댓글 저장 완료: 바비톡 ID {comment.id} -> DB ID {comment_id}")
+                    # self.log_info(f"댓글 저장 완료: 바비톡 ID {comment.id} -> DB ID {comment_id}")
                 
             except Exception as e:
                 self.log_error(f"댓글 저장 실패 (바비톡 ID: {comment.id}): {e}")

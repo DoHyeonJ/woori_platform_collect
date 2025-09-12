@@ -212,13 +212,13 @@ class BabitalkAPI(LoggedClass):
             self.log_error(f"📋 상세 에러: {traceback.format_exc()}")
             return [], BabitalkPagination(has_next=False, search_after=None)
     
-    async def get_reviews_by_date(self, target_date: str, limit: int = 0) -> List[BabitalkReview]:
+    
+    async def get_reviews_by_date(self, target_date: str) -> List[BabitalkReview]:
         """
         특정 날짜의 후기를 수집합니다.
         
         Args:
             target_date: 수집할 날짜 (YYYY-MM-DD 형식)
-            limit: 수집할 최대 개수 (0이면 무제한)
         
         Returns:
             List[BabitalkReview]: 해당 날짜의 후기 목록
@@ -233,17 +233,9 @@ class BabitalkAPI(LoggedClass):
             max_404_errors = 5
             
             while True:
-                # limit 체크 (0이면 무제한)
-                if limit > 0 and len(all_reviews) >= limit:
-                    self.log_info(f"📊 수집 개수 제한 도달: {limit}개")
-                    break
-                
-                # limit이 설정된 경우 페이지당 개수를 limit에 맞춰 조정
-                page_limit = min(24, limit) if limit > 0 else 24
-                
-                # API에서 후기 데이터 가져오기 (최신순)
+                # API에서 후기 데이터 가져오기 (최신순, 24개씩)
                 reviews, pagination = await self.get_surgery_reviews(
-                    limit=page_limit,
+                    limit=24,  # API 최대 제한
                     search_after=search_after,
                     sort="recent"
                 )
@@ -260,10 +252,6 @@ class BabitalkAPI(LoggedClass):
                         review_date = datetime.strptime(review_date_str, "%Y-%m-%d")
                         
                         if review_date.date() == target_date_obj.date():
-                            # limit 체크 (0이면 무제한)
-                            if limit > 0 and len(all_reviews) >= limit:
-                                self.log_info(f"📊 수집 개수 제한 도달: {limit}개")
-                                return all_reviews
                             date_filtered_reviews.append(review)
                         elif review_date.date() < target_date_obj.date():
                             # 과거 날짜를 만나면 더 이상 해당 날짜의 후기가 없으므로 중단
@@ -274,11 +262,6 @@ class BabitalkAPI(LoggedClass):
                 
                 # 필터링된 후기 추가
                 all_reviews.extend(date_filtered_reviews)
-                
-                # limit 체크 (0이면 무제한) - 날짜 필터링 후 체크
-                if limit > 0 and len(all_reviews) >= limit:
-                    self.log_info(f"📊 수집 개수 제한 도달: {limit}개")
-                    break
                 
                 # 다음 페이지 확인
                 if not pagination.has_next or not pagination.search_after:
@@ -363,6 +346,7 @@ class BabitalkAPI(LoggedClass):
                 async with session.get(url, params=params) as response:
                     if response.status != 200:
                         error_msg = f"HTTP {response.status}: {response.reason}"
+                        self.log_error(f"❌ 발품후기 수집 실패: url: {url}, params: {params}")
                         raise Exception(error_msg)
                     
                     json_data = await response.json()
@@ -395,14 +379,14 @@ class BabitalkAPI(LoggedClass):
             self.log_error(f"📋 상세 에러: {traceback.format_exc()}")
             return [], BabitalkEventAskMemoPagination(has_next=False, search_after=None)
     
-    async def get_event_ask_memos_by_date(self, target_date: str, category_id: int, limit: int = 0) -> List[BabitalkEventAskMemo]:
+    
+    async def get_event_ask_memos_by_date(self, target_date: str, category_id: int) -> List[BabitalkEventAskMemo]:
         """
         특정 날짜의 모든 발품후기를 수집합니다.
         
         Args:
             target_date: 수집할 날짜 (YYYY-MM-DD 형식)
             category_id: 카테고리 ID
-            limit: 수집할 최대 개수 (0이면 무제한)
         
         Returns:
             List[BabitalkEventAskMemo]: 해당 날짜의 모든 발품후기 목록
@@ -414,37 +398,49 @@ class BabitalkAPI(LoggedClass):
         
         try:
             while True:
-                # API에서 발품후기 데이터 가져오기 (최신순)
+                # API에서 발품후기 데이터 가져오기 (최신순, 24개씩)
                 memos, pagination = await self.get_event_ask_memos(
                     category_id=category_id,
-                    limit=limit,
+                    limit=24,  # API 최대 제한
                     search_after=search_after,
                     sort="recent"
                 )
-
-                print("")
                 
                 if not memos:
                     break
                 
                 # 날짜 필터링 (first_write_at은 "20분전", "17시간전" 등의 형식이므로 현재 시간 기준으로 계산)
                 date_filtered_memos = []
+                found_target_date = False
+                should_stop = False
+                
                 for memo in memos:
                     try:
-                        # first_write_at을 실제 날짜로 변환 (현재 시간 기준)
+                        # first_write_at을 실제 날짜로 변환 (UTC 시간 기준)
                         memo_date = self._parse_relative_time_to_date(memo.first_write_at)
+                        
                         
                         if memo_date.date() == target_date_obj.date():
                             date_filtered_memos.append(memo)
+                            found_target_date = True
                         elif memo_date.date() < target_date_obj.date():
                             # 과거 날짜를 만나면 더 이상 해당 날짜의 발품후기가 없으므로 중단
-                            return all_memos
+                            should_stop = True
+                            break
                             
                     except Exception:
                         continue
                 
                 # 필터링된 발품후기 추가
                 all_memos.extend(date_filtered_memos)
+                
+                # 중단 조건 확인
+                if should_stop:
+                    return all_memos
+                
+                # 목표 날짜 데이터를 찾지 못했으면 페이지네이션 중단
+                if not found_target_date and page > 1:
+                    return all_memos
                 
                 # 다음 페이지 확인
                 if not pagination.has_next or not pagination.search_after:
@@ -594,27 +590,29 @@ class BabitalkAPI(LoggedClass):
     def _parse_relative_time_to_date(self, relative_time: str) -> datetime:
         """
         상대적 시간 표현을 실제 날짜로 변환합니다.
+        바비톡 API는 UTC 시간을 기준으로 하므로 UTC 시간을 사용합니다.
         
         Args:
             relative_time: "20분전", "17시간전", "3일전" 등의 상대적 시간 표현
         
         Returns:
-            datetime: 실제 날짜
+            datetime: 실제 날짜 (UTC 기준)
         """
-        now = datetime.now()
+        # UTC 시간 사용 (바비톡 API 기준)
+        now_utc = datetime.utcnow()
         
         if "분전" in relative_time:
             minutes = int(relative_time.replace("분전", ""))
-            return now - timedelta(minutes=minutes)
+            return now_utc - timedelta(minutes=minutes)
         elif "시간전" in relative_time:
             hours = int(relative_time.replace("시간전", ""))
-            return now - timedelta(hours=hours)
+            return now_utc - timedelta(hours=hours)
         elif "일전" in relative_time:
             days = int(relative_time.replace("일전", ""))
-            return now - timedelta(days=days)
+            return now_utc - timedelta(days=days)
         else:
-            # 알 수 없는 형식이면 현재 시간 반환
-            return now
+            # 알 수 없는 형식이면 현재 UTC 시간 반환
+            return now_utc
 
     async def get_talks(self, service_id: int, limit: int = 24, search_after: Optional[int] = None, sort: str = "recent") -> tuple[List[BabitalkTalk], BabitalkTalkPagination]:
         """
@@ -678,15 +676,15 @@ class BabitalkAPI(LoggedClass):
             import traceback
             self.log_error(f"📋 상세 에러: {traceback.format_exc()}")
             return [], BabitalkTalkPagination(has_next=False, search_after=None)
-
-    async def get_talks_by_date(self, target_date: str, service_id: int, limit: int = 0) -> List[BabitalkTalk]:
+    
+    
+    async def get_talks_by_date(self, target_date: str, service_id: int) -> List[BabitalkTalk]:
         """
         특정 날짜의 모든 자유톡을 수집합니다.
         
         Args:
             target_date: 수집할 날짜 (YYYY-MM-DD 형식)
             service_id: 서비스 ID (79: 성형, 71: 쁘띠/피부, 72: 일상)
-            limit: 수집할 최대 개수 (0이면 무제한)
         
         Returns:
             List[BabitalkTalk]: 해당 날짜의 모든 자유톡 목록
@@ -698,10 +696,10 @@ class BabitalkAPI(LoggedClass):
         
         try:
             while True:
-                # API에서 자유톡 데이터 가져오기 (최신순)
+                # API에서 자유톡 데이터 가져오기 (최신순, 24개씩)
                 talks, pagination = await self.get_talks(
                     service_id=service_id,
-                    limit=limit,
+                    limit=24,  # API 최대 제한
                     search_after=search_after,
                     sort="recent"
                 )
@@ -711,7 +709,11 @@ class BabitalkAPI(LoggedClass):
                 
                 # 날짜 필터링
                 date_filtered_talks = []
-                for talk in talks:
+                found_target_date = False
+                should_stop = False
+                past_date_count = 0  # 연속 과거 날짜 카운터
+                
+                for i, talk in enumerate(talks):
                     try:
                         # created_at 파싱 (예: "2025-01-15 16:45:01")
                         talk_date_str = talk.created_at.split()[0]  # 날짜 부분만 추출
@@ -719,15 +721,28 @@ class BabitalkAPI(LoggedClass):
                         
                         if talk_date.date() == target_date_obj.date():
                             date_filtered_talks.append(talk)
+                            found_target_date = True
+                            past_date_count = 0  # 목표 날짜를 찾았으므로 카운터 리셋
                         elif talk_date.date() < target_date_obj.date():
-                            # 과거 날짜를 만나면 더 이상 해당 날짜의 자유톡이 없으므로 중단
-                            return all_talks
+                            # 과거 날짜 카운터 증가
+                            past_date_count += 1
                             
-                    except Exception:
+                            # 연속으로 과거 날짜가 5개 이상 나오면 중단
+                            if past_date_count >= 5:
+                                should_stop = True
+                                break
+                        else:
+                            past_date_count = 0  # 미래 날짜를 만나면 카운터 리셋
+                            
+                    except Exception as e:
                         continue
                 
                 # 필터링된 자유톡 추가
                 all_talks.extend(date_filtered_talks)
+                
+                # 중단 조건 확인 - 과거 날짜를 만났으면 중단
+                if should_stop:
+                    return all_talks
                 
                 # 다음 페이지 확인
                 if not pagination.has_next or not pagination.search_after:

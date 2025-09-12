@@ -289,7 +289,7 @@ class SQLAlchemyDatabaseManager:
             )
             session.add(comment)
             session.commit()
-            logger.info(f"댓글 저장 완료: ID {comment.id}, 게시글 ID {article_id}")
+            # logger.info(f"댓글 저장 완료: ID {comment.id}, 게시글 ID {article_id}")
             return comment.id
             
         except Exception as e:

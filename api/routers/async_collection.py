@@ -17,7 +17,6 @@ class BabitalkCollectionRequest(BaseModel):
     """바비톡 수집 요청 모델"""
     target_date: str = Field(..., description="수집할 날짜 (YYYY-MM-DD)")
     categories: Optional[List[str]] = Field(["reviews", "talks", "event_ask_memos"], description="수집할 카테고리")
-    limit: Optional[int] = Field(24, description="페이지당 수집할 데이터 수")
 
 class GangnamunniCollectionRequest(BaseModel):
     """강남언니 수집 요청 모델"""
@@ -57,8 +56,7 @@ async def start_babitalk_collection(request: BabitalkCollectionRequest):
             TaskType.BABITALK_COLLECT,
             {
                 "target_date": request.target_date,
-                "categories": request.categories,
-                "limit": request.limit
+                "categories": request.categories
             }
         )
         
@@ -67,8 +65,7 @@ async def start_babitalk_collection(request: BabitalkCollectionRequest):
             task_id,
             AsyncCollectionService.collect_babitalk_data,
             request.target_date,
-            request.categories,
-            request.limit
+            request.categories
         )
         
         if not success:

@@ -18,7 +18,6 @@ class AsyncCollectionService:
     async def collect_babitalk_data(
         target_date: str,
         categories: list = None,
-        limit: int = 24,
         progress_callback: Optional[Callable] = None
     ) -> Dict[str, Any]:
         """
@@ -27,7 +26,6 @@ class AsyncCollectionService:
         Args:
             target_date: 수집할 날짜 (YYYY-MM-DD)
             categories: 수집할 카테고리 목록 ["reviews", "talks", "event_ask_memos"]
-            limit: 페이지당 수집할 데이터 수
             progress_callback: 진행률 콜백 함수
             
         Returns:
@@ -60,7 +58,7 @@ class AsyncCollectionService:
                 if progress_callback:
                     progress_callback(completed_categories, total_categories, "시술후기 수집 중...")
                 
-                review_count = await collector.collect_reviews_by_date(target_date, limit_per_page=limit)
+                review_count = await collector.collect_reviews_by_date(target_date)
                 results["total_reviews"] += review_count
                 results["category_results"]["reviews"] = review_count
                 completed_categories += 1
@@ -72,7 +70,7 @@ class AsyncCollectionService:
                 if progress_callback:
                     progress_callback(completed_categories, total_categories, "발품후기 수집 중...")
                 
-                memo_results = await collector.collect_all_event_ask_memos_by_date(target_date, limit_per_page=limit)
+                memo_results = await collector.collect_all_event_ask_memos_by_date(target_date)
                 memo_total = sum(memo_results.values())
                 results["total_articles"] += memo_total
                 results["category_results"]["event_ask_memos"] = memo_results
@@ -85,7 +83,7 @@ class AsyncCollectionService:
                 if progress_callback:
                     progress_callback(completed_categories, total_categories, "자유톡 수집 중...")
                 
-                talk_results = await collector.collect_all_talks_by_date(target_date, limit_per_page=limit)
+                talk_results = await collector.collect_all_talks_by_date(target_date)
                 talk_total = sum(talk_results.values())
                 results["total_articles"] += talk_total
                 results["category_results"]["talks"] = talk_results
@@ -98,7 +96,7 @@ class AsyncCollectionService:
                 # 각 서비스별 댓글 수집
                 comment_total = 0
                 for service_id in collector.api.TALK_SERVICE_CATEGORIES.keys():
-                    comments_count = await collector.collect_comments_for_talks_by_date(target_date, service_id, limit_per_page=limit)
+                    comments_count = await collector.collect_comments_for_talks_by_date(target_date, service_id)
                     comment_total += comments_count
                 
                 results["total_comments"] += comment_total
@@ -108,6 +106,14 @@ class AsyncCollectionService:
             
             results["end_time"] = datetime.now().isoformat()
             results["status"] = "success"
+            
+            # 최종 완료 로그 출력
+            print(f"🎉 바비톡 데이터 수집 완료!")
+            print(f"📊 수집 결과:")
+            print(f"   시술후기: {results['total_reviews']}개")
+            print(f"   발품후기: {results['total_articles']}개")
+            print(f"   자유톡 댓글: {results['total_comments']}개")
+            print(f"   수집 시간: {results['start_time']} ~ {results['end_time']}")
             
             return results
             
