@@ -158,8 +158,22 @@ async def collect_gannamunni_data(
     """
     start_time = time.time()
     
+    # 로깅을 위한 카테고리명 매핑
+    category_names = {
+        "hospital_question": "병원질문",
+        "surgery_question": "시술/수술질문",
+        "free_chat": "자유수다",
+        "review": "발품후기",
+        "ask_doctor": "의사에게 물어보세요"
+    }
+    
+    category_name = category_names.get(request.category, request.category)
+    print(f"🚀 강남언니 {category_name} 데이터 수집 시작...")
+    print(f"📅 수집 날짜: {request.target_date}")
+    print(f"💾 저장 방식: {'후기' if request.save_as_reviews else '게시글'}")
+    
     try:
-        collector = GangnamUnniDataCollector()
+        collector = GangnamUnniDataCollector(token=request.token)
         
         # 강남언니 데이터 수집
         result = await collector.collect_articles_by_date(
@@ -170,6 +184,11 @@ async def collect_gannamunni_data(
         
         execution_time = time.time() - start_time
         
+        # 수집 완료 로그
+        print(f"✅ 강남언니 {category_name} 데이터 수집 완료!")
+        print(f"📊 수집 결과: {result}개 {'후기' if request.save_as_reviews else '게시글'}")
+        print(f"⏱️  총 소요시간: {execution_time:.2f}초")
+        
         return CollectionResult(
             platform=PlatformType.GANGNAMUNNI,
             category=request.category,
@@ -179,12 +198,15 @@ async def collect_gannamunni_data(
             total_reviews=result if request.save_as_reviews else 0,
             execution_time=execution_time,
             status="success",
-            message=f"강남언니 {request.category} 데이터 수집 완료",
+            message=f"강남언니 {category_name} 데이터 수집 완료",
             timestamp=datetime.now()
         )
         
     except Exception as e:
         execution_time = time.time() - start_time
+        print(f"❌ 강남언니 {category_name} 데이터 수집 실패!")
+        print(f"📋 오류 내용: {str(e)}")
+        print(f"⏱️  실패까지 소요시간: {execution_time:.2f}초")
         raise HTTPException(
             status_code=500,
             detail=f"강남언니 데이터 수집 실패: {str(e)}"

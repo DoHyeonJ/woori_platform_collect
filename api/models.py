@@ -60,6 +60,7 @@ class GangnamUnniCollectionRequest(BaseModel):
     target_date: str = Field(..., description="수집할 날짜 (YYYY-MM-DD)")
     save_as_reviews: bool = Field(False, description="후기 테이블에 저장할지 여부")
     limit: int = Field(24, ge=1, le=100, description="페이지당 수집할 데이터 수 (1-100)")
+    token: Optional[str] = Field(None, description="강남언니 API 토큰 (None이면 기본값 사용)")
 
 class BabitalkCollectionRequest(BaseModel):
     """바비톡 데이터 수집 요청 모델"""

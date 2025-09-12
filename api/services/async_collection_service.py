@@ -128,7 +128,7 @@ class AsyncCollectionService:
         target_date: str,
         categories: list = None,
         save_as_reviews: bool = False,
-        limit: int = 0,
+        token: str = None,
         progress_callback: Optional[Callable] = None
     ) -> Dict[str, Any]:
         """
@@ -138,7 +138,7 @@ class AsyncCollectionService:
             target_date: 수집할 날짜 (YYYY-MM-DD)
             categories: 수집할 카테고리 목록
             save_as_reviews: 후기로 저장할지 여부
-            limit: 수집할 최대 개수
+            token: 강남언니 API 토큰 (None이면 기본값 사용)
             progress_callback: 진행률 콜백 함수
             
         Returns:
@@ -147,11 +147,29 @@ class AsyncCollectionService:
         if categories is None:
             categories = ["hospital_question", "surgery_question", "free_chat", "review", "ask_doctor"]
         
-        collector = GangnamUnniDataCollector()
+        import time
+        start_time = time.time()
+        
+        collector = GangnamUnniDataCollector(token=token)
+        
+        # 로깅을 위한 카테고리명 매핑
+        category_names = {
+            "hospital_question": "병원질문",
+            "surgery_question": "시술/수술질문",
+            "free_chat": "자유수다",
+            "review": "발품후기",
+            "ask_doctor": "의사에게 물어보세요"
+        }
+        
+        print(f"🚀 강남언니 비동기 수집 서비스 시작...")
+        print(f"📅 수집 날짜: {target_date}")
+        print(f"📂 수집 카테고리: {len(categories)}개")
+        print(f"💾 저장 방식: {'후기' if save_as_reviews else '게시글'}")
         
         results = {
             "target_date": target_date,
             "total_articles": 0,
+            "total_comments": 0,
             "category_results": {},
             "start_time": datetime.now().isoformat(),
             "end_time": None
@@ -165,21 +183,40 @@ class AsyncCollectionService:
                 progress_callback(0, total_categories, "강남언니 데이터 수집 시작")
             
             for category in categories:
+                category_name = category_names.get(category, category)
+                print(f"🔄 {category_name} 카테고리 수집 중...")
+                
                 if progress_callback:
-                    progress_callback(completed_categories, total_categories, f"{category} 카테고리 수집 중...")
+                    progress_callback(completed_categories, total_categories, f"{category_name} 카테고리 수집 중...")
                 
                 count = await collector.collect_articles_by_date(target_date, category, save_as_reviews)
                 results["total_articles"] += count
                 results["category_results"][category] = count
                 completed_categories += 1
                 
+                print(f"✅ {category_name} 카테고리 수집 완료: {count}개")
+                
                 await asyncio.sleep(2)  # API 호출 간격 조절
+            
+            end_time = time.time()
+            total_elapsed_time = end_time - start_time
             
             if progress_callback:
                 progress_callback(total_categories, total_categories, "강남언니 데이터 수집 완료")
             
             results["end_time"] = datetime.now().isoformat()
             results["status"] = "success"
+            
+            # 수집 완료 로그
+            print(f"✅ 강남언니 비동기 수집 서비스 완료!")
+            print(f"📊 전체 수집 결과: 게시글 {results['total_articles']}개")
+            print(f"⏱️  총 소요시간: {total_elapsed_time:.2f}초")
+            
+            # 카테고리별 상세 결과
+            print(f"📋 카테고리별 수집 결과:")
+            for category, count in results["category_results"].items():
+                category_name = category_names.get(category, category)
+                print(f"   - {category_name}: {count}개")
             
             return results
             

@@ -80,8 +80,8 @@ class NaverCafeAPI(LoggedClass):
             }
             
             self.log_info(f"요청 URL: {url}")
-            self.log_info(f"요청 파라미터: {params}")
-            self.log_info(f"요청 헤더: {self.headers}")
+            # self.log_info(f"요청 파라미터: {params}")
+            # self.log_info(f"요청 헤더: {self.headers}")
             
             async with aiohttp.ClientSession() as session:
                 async with session.get(url, params=params, headers=self.headers) as response:
@@ -209,9 +209,9 @@ class NaverCafeAPI(LoggedClass):
                 "requestFrom": "A"
             }
             
-            self.log_info(f"요청 URL: {url}")
-            self.log_info(f"요청 파라미터: {params}")
-            self.log_info(f"요청 헤더: {self.headers}")
+            # self.log_info(f"요청 URL: {url}")
+            # self.log_info(f"요청 파라미터: {params}")
+            # self.log_info(f"요청 헤더: {self.headers}")
             
             async with aiohttp.ClientSession() as session:
                 async with session.get(url, params=params, headers=self.headers) as response:

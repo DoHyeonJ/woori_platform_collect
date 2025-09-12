@@ -26,7 +26,7 @@ class GangnamunniCollectionRequest(BaseModel):
         description="수집할 카테고리"
     )
     save_as_reviews: Optional[bool] = Field(False, description="후기로 저장할지 여부")
-    limit: Optional[int] = Field(0, description="수집할 최대 개수 (0이면 무제한)")
+    token: Optional[str] = Field(None, description="강남언니 API 토큰 (None이면 기본값 사용)")
 
 class NaverCollectionRequest(BaseModel):
     """네이버 수집 요청 모델"""
@@ -86,6 +86,27 @@ async def start_gangnamunni_collection(request: GangnamunniCollectionRequest):
     
     백그라운드에서 강남언니 데이터를 비동기로 수집합니다.
     """
+    import time
+    start_time = time.time()
+    
+    # 로깅을 위한 카테고리명 매핑
+    category_names = {
+        "hospital_question": "병원질문",
+        "surgery_question": "시술/수술질문",
+        "free_chat": "자유수다",
+        "review": "발품후기",
+        "ask_doctor": "의사에게 물어보세요"
+    }
+    
+    # 카테고리명 변환
+    category_display_names = [category_names.get(cat, cat) for cat in request.categories]
+    
+    print(f"🚀 강남언니 비동기 데이터 수집 시작...")
+    print(f"📅 수집 날짜: {request.target_date}")
+    print(f"📂 수집 카테고리: {', '.join(category_display_names)}")
+    print(f"💾 저장 방식: {'후기' if request.save_as_reviews else '게시글'}")
+    print(f"🔑 토큰: {'사용자 지정' if request.token else '기본값'}")
+    
     try:
         # 작업 생성
         task_id = task_manager.create_task(
@@ -94,7 +115,7 @@ async def start_gangnamunni_collection(request: GangnamunniCollectionRequest):
                 "target_date": request.target_date,
                 "categories": request.categories,
                 "save_as_reviews": request.save_as_reviews,
-                "limit": request.limit
+                "token": request.token
             }
         )
         
@@ -105,11 +126,16 @@ async def start_gangnamunni_collection(request: GangnamunniCollectionRequest):
             request.target_date,
             request.categories,
             request.save_as_reviews,
-            request.limit
+            request.token
         )
         
         if not success:
             raise HTTPException(status_code=500, detail="작업 시작에 실패했습니다")
+        
+        setup_time = time.time() - start_time
+        print(f"✅ 강남언니 비동기 수집 작업 시작 완료!")
+        print(f"🆔 작업 ID: {task_id}")
+        print(f"⏱️  작업 설정 소요시간: {setup_time:.2f}초")
         
         return TaskResponse(
             task_id=task_id,
@@ -117,6 +143,10 @@ async def start_gangnamunni_collection(request: GangnamunniCollectionRequest):
         )
         
     except Exception as e:
+        setup_time = time.time() - start_time
+        print(f"❌ 강남언니 비동기 수집 작업 시작 실패!")
+        print(f"📋 오류 내용: {str(e)}")
+        print(f"⏱️  실패까지 소요시간: {setup_time:.2f}초")
         raise HTTPException(status_code=500, detail=f"작업 생성 실패: {str(e)}")
 
 @router.post("/naver/start", response_model=TaskResponse)

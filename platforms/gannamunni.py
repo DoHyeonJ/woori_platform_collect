@@ -69,15 +69,15 @@ class Article:
     comments: List[Comment] = None
 
 class GangnamUnniAPI(LoggedClass):
-    def __init__(self):
+    def __init__(self, token: str = "456c327614a94565b61f40f6683cda6c"):
         super().__init__("GangnamUnniAPI")
         self.base_url = "https://www.gangnamunni.com"
+        self.token = token
         self.headers = {
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36",
             "Accept": "application/json, text/plain, */*",
             "Accept-Language": "ko-KR,ko;q=0.9,en;q=0.8",
             "Accept-Encoding": "gzip, deflate, br, zstd",
-            "Authorization": "a70ba5dec9424aeb99e956a19cba87a3",
             "Connection": "keep-alive",
             "Upgrade-Insecure-Requests": "1",
             "Sec-Fetch-Dest": "empty",
@@ -87,46 +87,62 @@ class GangnamUnniAPI(LoggedClass):
             "Pragma": "no-cache",
         }
     
-    async def get_article_list(self, category: str = "hospital_question", page: int = 1, limit: int = 20) -> List[Article]:
+    async def get_article_list(self, category: str = "hospital_question", page: int = 1) -> List[Article]:
         """
         강남언니 커뮤니티 게시글 목록을 가져옵니다.
         
         Args:
             category: 카테고리 (기본값: "hospital_question" - 병원질문)
             page: 페이지 번호 (기본값: 1)
-            limit: 한 페이지당 게시글 수 (기본값: 20)
         
         Returns:
             List[Article]: 게시글 목록
         """
         try:
-            async with aiohttp.ClientSession(headers=self.headers) as session:
-                # API 엔드포인트 사용
-                url = f"{self.base_url}/api/v2/community"
-                
-                # 페이지 계산 (API는 start 파라미터 사용)
-                start = (page - 1) * limit
-                
-                # 카테고리 ID 매핑
-                category_ids = {
-                    "hospital_question": 11,  # 병원질문
-                    "surgery_question": 2,    # 시술/수술질문
-                    "free_chat": 1,           # 자유수다
-                    "review": 5,              # 발품후기
-                    "ask_doctor": 13,         # 의사에게 물어보세요
-                }
-                
-                category_id = category_ids.get(category, 11)
-                
-                params = {
-                    "start": start,
-                    "length": limit,
-                    "sort": "createTime",
-                    "categoryIds": category_id,
-                    "draw": 0
-                }
-                
-                async with session.get(url, params=params) as response:
+            # 토큰을 포함한 헤더 생성
+            api_headers = {
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36",
+                "Accept": "application/json, text/plain, */*",
+                "Accept-Language": "ko-KR,ko;q=0.9,en;q=0.8",
+                "Accept-Encoding": "gzip, deflate, br, zstd",
+                "Referer": "https://www.gangnamunni.com/",
+                "Origin": "https://www.gangnamunni.com",
+                "Connection": "keep-alive",
+                "Upgrade-Insecure-Requests": "1",
+                "Sec-Fetch-Dest": "empty",
+                "Sec-Fetch-Mode": "cors",
+                "Sec-Fetch-Site": "same-origin",
+                "Cache-Control": "no-cache",
+                "Pragma": "no-cache",
+                "Cookie": f"token={self.token}"
+            }
+            
+            # 새로운 solar API 엔드포인트 사용
+            url = f"{self.base_url}/api/solar/search/document"
+            
+            # 페이지 계산 (API는 start 파라미터 사용, 고정 20개)
+            start = (page - 1) * 20
+            
+            # 카테고리 ID 매핑
+            category_ids = {
+                "hospital_question": 11,  # 병원질문
+                "surgery_question": 2,    # 시술/수술질문
+                "free_chat": 1,           # 자유수다
+                "review": 5,              # 발품후기
+                "ask_doctor": 13,         # 의사에게 물어보세요
+            }
+            
+            category_id = category_ids.get(category, 11)
+            
+            params = {
+                "start": start,
+                "length": 20,  # 고정 20개
+                "sort": "createTime",
+                "categoryIds": category_id
+            }
+            
+            async with aiohttp.ClientSession() as session:
+                async with session.get(url, params=params, headers=api_headers) as response:
                     if response.status == 404:
                         raise Exception(f"404 Not Found: 게시글을 찾을 수 없습니다")
                     elif response.status != 200:
@@ -134,8 +150,9 @@ class GangnamUnniAPI(LoggedClass):
                     
                     json_data = await response.json()
                     
-                    # FAIL 응답이 나와도 data가 있으면 처리
-                    if json_data.get("reason") == "FAIL" and json_data.get("data") is None:
+                    # SUCCESS 응답 확인
+                    if json_data.get("reason") != "SUCCESS":
+                        self.log_error(f"API 응답 오류: {json_data.get('reason')}")
                         return []
                     
                     # data 배열에서 게시글 목록 추출
@@ -143,7 +160,7 @@ class GangnamUnniAPI(LoggedClass):
                     
                     articles = []
                     for item in articles_data:
-                        article = self._parse_article_from_api(item)
+                        article = self._parse_article_from_solar_api(item)
                         articles.append(article)
                     
                     return articles
@@ -153,14 +170,13 @@ class GangnamUnniAPI(LoggedClass):
             # API 실패 시 빈 리스트 반환
             return []
     
-    async def get_articles_by_date(self, target_date: str, category: str = "hospital_question", limit: int = 0) -> List[Article]:
+    async def get_articles_by_date(self, target_date: str, category: str = "hospital_question") -> List[Article]:
         """
         특정 날짜의 게시글을 수집합니다.
         
         Args:
             target_date: 수집할 날짜 (YYYY-MM-DD 형식, 예: "2024-01-15")
             category: 카테고리 (기본값: "hospital_question" - 병원질문)
-            limit: 수집할 최대 개수 (0이면 무제한)
         
         Returns:
             List[Article]: 해당 날짜의 게시글 목록
@@ -183,11 +199,8 @@ class GangnamUnniAPI(LoggedClass):
         
         while page <= max_pages and consecutive_empty_pages < max_consecutive_empty:
             try:
-                # limit이 설정된 경우 페이지당 개수를 limit에 맞춰 조정
-                page_limit = min(20, limit) if limit > 0 else 20
-                
                 # 현재 페이지의 게시글 가져오기
-                page_articles = await self.get_article_list(category=category, page=page, limit=page_limit)
+                page_articles = await self.get_article_list(category=category, page=page)
                 
                 if not page_articles:
                     consecutive_empty_pages += 1
@@ -195,10 +208,6 @@ class GangnamUnniAPI(LoggedClass):
                     await asyncio.sleep(1)
                     continue
                 
-                # limit 체크 (0이면 무제한) - 페이지 가져오기 전에 체크
-                if limit > 0 and len(all_articles) >= limit:
-                    self.log_info(f"📊 수집 개수 제한 도달: {limit}개")
-                    break
                 
                 # 날짜별 필터링
                 target_date_articles = []
@@ -209,10 +218,6 @@ class GangnamUnniAPI(LoggedClass):
                         article_date = self._parse_article_date(article.create_time)
                         
                         if article_date == target_date_obj:
-                            # limit 체크 (0이면 무제한)
-                            if limit > 0 and len(all_articles) >= limit:
-                                self.log_info(f"📊 수집 개수 제한 도달: {limit}개")
-                                break
                             target_date_articles.append(article)
                             found_target_date = True
                         elif article_date < target_date_obj:
@@ -229,11 +234,6 @@ class GangnamUnniAPI(LoggedClass):
                 # 해당 날짜의 게시글 추가
                 if target_date_articles:
                     all_articles.extend(target_date_articles)
-                    
-                    # limit 체크 (0이면 무제한) - 날짜 필터링 후 체크
-                    if limit > 0 and len(all_articles) >= limit:
-                        self.log_info(f"📊 수집 개수 제한 도달: {limit}개")
-                        break
                 
                 # 더 오래된 게시글이 발견되면 수집 중단
                 if older_articles_found:
@@ -362,6 +362,62 @@ class GangnamUnniAPI(LoggedClass):
             # 오류가 발생해도 빈 리스트 반환 (pass 처리)
             return []
     
+    def _parse_article_from_solar_api(self, data: Dict) -> Article:
+        """
+        새로운 solar API 응답의 게시글 데이터를 Article 객체로 파싱합니다.
+        
+        Args:
+            data: solar API 응답의 게시글 데이터 딕셔너리
+        
+        Returns:
+            Article: 파싱된 게시글 객체
+        """
+        # 작성자 정보 파싱 (solar API 형식)
+        writer = Writer(
+            id=data.get("writerId", 0),
+            doctor_id=data.get("writerDoctorId"),
+            profile=data.get("writerProfile", ""),
+            nickname=data.get("writerNickName", ""),
+            level=data.get("writerLevel", 1),
+            engagement_type=data.get("writerEngagementType")
+        )
+        
+        # 사진 정보 파싱 (solar API에서는 문자열 배열)
+        photos = []
+        for photo_url in data.get("photos", []):
+            photo = Photo(url=photo_url)
+            photos.append(photo)
+        
+        # createTime을 타임스탬프에서 문자열로 변환
+        create_time_timestamp = data.get("createTime", 0)
+        if create_time_timestamp:
+            create_time_str = self._timestamp_to_readable_time(create_time_timestamp)
+        else:
+            create_time_str = ""
+        
+        # 게시글 객체 생성
+        article = Article(
+            id=data.get("id", 0),
+            category_id=data.get("categoryId", 0),
+            category_name=data.get("categoryName", ""),
+            writer=writer,
+            writer_doctor_id=data.get("writerDoctorId"),
+            has_thumb_up=data.get("hasThumbUp", False),
+            comment_count=data.get("commentCount", 0),
+            thumb_up_count=data.get("thumbUpCount", 0),
+            view_count=data.get("viewCount", 0),
+            create_time=create_time_str,
+            edited=data.get("edited", False),
+            title="",  # solar API에는 title 필드가 없음
+            contents=data.get("contents", ""),
+            photos=photos,
+            lang=data.get("lang", "ko"),
+            has_doctor_comment=data.get("hasDoctorComment", False),
+            translate_result=data.get("translateResult")
+        )
+        
+        return article
+
     def _parse_article_from_api(self, data: Dict) -> Article:
         """
         API 응답의 게시글 데이터를 Article 객체로 파싱합니다.
@@ -624,7 +680,7 @@ class GangnamUnniAPI(LoggedClass):
         """
         try:
             # 전체 게시글 목록을 가져와서 키워드 필터링
-            articles = await self.get_article_list(category=category, page=1, limit=100)
+            articles = await self.get_article_list(category=category, page=1)
             
             filtered_articles = []
             for article in articles:
@@ -653,7 +709,7 @@ async def test_gannamunni_api():
     try:
         # 게시글 목록 테스트
         logger.info("📝 게시글 목록 테스트")
-        articles = await api.get_article_list(category="hospital_question", page=1, limit=5)
+        articles = await api.get_article_list(category="hospital_question", page=1)
         
         logger.info(f"\n📊 게시글 목록 테스트 결과:")
         logger.info(f"   수집된 게시글: {len(articles)}개")

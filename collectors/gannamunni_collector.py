@@ -7,9 +7,9 @@ from database.models import DatabaseManager, Community, Article as DBArticle, Co
 from utils.logger import LoggedClass
 
 class GangnamUnniDataCollector(LoggedClass):
-    def __init__(self):
+    def __init__(self, token: str = None):
         super().__init__("GangnamUnniCollector")
-        self.api = GangnamUnniAPI()
+        self.api = GangnamUnniAPI(token=token)
         self.db = DatabaseManager()  # db_path 파라미터 제거
     
     async def collect_articles_by_date(self, target_date: str, category: str = "hospital_question", save_as_reviews: bool = False) -> int:
@@ -24,7 +24,9 @@ class GangnamUnniDataCollector(LoggedClass):
         Returns:
             int: 수집된 게시글 수
         """
-        self.log_info(f"📅 {target_date} 날짜 강남언니 {category} 게시글 수집 시작")
+        import time
+        start_time = time.time()
+        self.log_info(f"📅 {target_date} 날짜 강남언니 {category} 게시글 수집 시작...")
         
         # 강남언니 커뮤니티 생성 또는 조회
         gangnamunni_community = await self._get_or_create_gannamunni_community()
@@ -34,11 +36,15 @@ class GangnamUnniDataCollector(LoggedClass):
             articles = await self.api.get_articles_by_date(target_date, category=category)
             
             if not articles:
-                self.log_info(f"📭 {target_date} 날짜에 수집할 게시글이 없습니다.")
+                end_time = time.time()
+                elapsed_time = end_time - start_time
+                self.log_info(f"📭 {target_date} 날짜에 수집할 게시글이 없습니다. (소요시간: {elapsed_time:.2f}초)")
                 return 0
             
             # 각 게시글 처리 및 저장
             total_articles = 0
+            total_comments = 0
+            
             for i, article in enumerate(articles):
                 try:
                     # 게시글 정보 저장
@@ -55,7 +61,8 @@ class GangnamUnniDataCollector(LoggedClass):
                             try:
                                 comments = await self.api.get_comments(article.id)
                                 if comments:
-                                    await self._save_comments(comments, article_id)
+                                    saved_comments = await self._save_comments(comments, article_id)
+                                    total_comments += saved_comments
                             except Exception as e:
                                 # 404 에러 발생 시 failover 처리
                                 if "404" in str(e) or "Not Found" in str(e):
@@ -75,17 +82,27 @@ class GangnamUnniDataCollector(LoggedClass):
                         self.log_error(f"❌ 게시글 처리 실패 (ID: {article.id}): {e}")
                         continue
             
-            self.log_info(f"✅ {target_date} 날짜 게시글 수집 완료: {total_articles}개")
+            end_time = time.time()
+            elapsed_time = end_time - start_time
+            
+            # 수집 완료 로그
+            self.log_info(f"✅ {target_date} 날짜 게시글 수집 완료!")
+            self.log_info(f"📊 수집 결과: 게시글 {total_articles}개, 댓글 {total_comments}개")
+            self.log_info(f"⏱️  소요시간: {elapsed_time:.2f}초")
+            
             return total_articles
             
         except Exception as e:
+            end_time = time.time()
+            elapsed_time = end_time - start_time
+            
             # 404 에러 발생 시 failover 처리
             if "404" in str(e) or "Not Found" in str(e):
-                self.log_error(f"❌ 404 에러 발생: {target_date} 날짜 게시글 목록 조회 실패")
+                self.log_error(f"❌ 404 에러 발생: {target_date} 날짜 게시글 목록 조회 실패 (소요시간: {elapsed_time:.2f}초)")
                 await self._handle_404_failover(target_date, category, save_as_reviews, gangnamunni_community, [], 0)
                 return 0
             else:
-                self.log_error(f"❌ 날짜별 게시글 수집 중 오류 발생: {e}")
+                self.log_error(f"❌ 날짜별 게시글 수집 중 오류 발생: {e} (소요시간: {elapsed_time:.2f}초)")
                 return 0
     
     async def _handle_404_failover(self, target_date: str, category: str, save_as_reviews: bool, 
@@ -101,6 +118,9 @@ class GangnamUnniDataCollector(LoggedClass):
             articles: 수집된 게시글 목록
             failed_index: 실패한 게시글의 인덱스
         """
+        import time
+        failover_start_time = time.time()
+        
         self.log_error(f"🔄 404 에러로 인한 수집 중단. 15분 후 실패 지점부터 재시작합니다.")
         self.log_error(f"📊 실패 지점: {failed_index + 1}번째 게시글 (총 {len(articles)}개 중)")
         
@@ -113,6 +133,7 @@ class GangnamUnniDataCollector(LoggedClass):
         # 실패한 게시글부터 다시 수집
         remaining_articles = articles[failed_index:]
         total_articles = len(articles) - failed_index
+        total_comments = 0
         
         for i, article in enumerate(remaining_articles):
             try:
@@ -130,7 +151,8 @@ class GangnamUnniDataCollector(LoggedClass):
                         try:
                             comments = await self.api.get_comments(article.id)
                             if comments:
-                                await self._save_comments(comments, article_id)
+                                saved_comments = await self._save_comments(comments, article_id)
+                                total_comments += saved_comments
                         except Exception as e:
                             if "404" in str(e) or "Not Found" in str(e):
                                 self.log_error(f"❌ 재시작 중에도 404 에러 발생: 게시글 ID {article.id} 댓글 수집 실패")
@@ -150,7 +172,12 @@ class GangnamUnniDataCollector(LoggedClass):
                     self.log_error(f"❌ 재시작 중 게시글 처리 실패 (ID: {article.id}): {e}")
                     continue
         
-        self.log_info(f"✅ 재시작 수집 완료: {total_articles}개 게시글 처리 완료")
+        failover_end_time = time.time()
+        failover_elapsed_time = failover_end_time - failover_start_time
+        
+        self.log_info(f"✅ 재시작 수집 완료!")
+        self.log_info(f"📊 재시작 수집 결과: 게시글 {total_articles}개, 댓글 {total_comments}개")
+        self.log_info(f"⏱️  재시작 소요시간: {failover_elapsed_time:.2f}초")
 
     async def collect_all_categories_by_date(self, target_date: str, save_as_reviews: bool = False) -> Dict[str, int]:
         """
@@ -163,7 +190,9 @@ class GangnamUnniDataCollector(LoggedClass):
         Returns:
             Dict[str, int]: 카테고리별 수집된 게시글 수
         """
-        self.log_info(f"📅 {target_date} 날짜 강남언니 모든 카테고리 게시글 수집 시작")
+        import time
+        start_time = time.time()
+        self.log_info(f"📅 {target_date} 날짜 강남언니 모든 카테고리 게시글 수집 시작...")
         
         categories = {
             "hospital_question": "병원질문",
@@ -174,12 +203,16 @@ class GangnamUnniDataCollector(LoggedClass):
         }
         
         results = {}
+        total_articles = 0
+        total_comments = 0
         
         # 모든 카테고리 순회
         for category_key, category_name in categories.items():
             try:
+                self.log_info(f"🔄 {category_name} 카테고리 수집 중...")
                 count = await self.collect_articles_by_date(target_date, category_key, save_as_reviews)
                 results[category_key] = count
+                total_articles += count
                 
                 # 카테고리 간 딜레이 (서버 부하 방지)
                 await asyncio.sleep(2)
@@ -199,6 +232,7 @@ class GangnamUnniDataCollector(LoggedClass):
                     try:
                         count = await self.collect_articles_by_date(target_date, category_key, save_as_reviews)
                         results[category_key] = count
+                        total_articles += count
                     except Exception as retry_e:
                         self.log_error(f"❌ 재시작 후에도 {category_name} 카테고리 수집 실패: {retry_e}")
                         results[category_key] = 0
@@ -206,9 +240,19 @@ class GangnamUnniDataCollector(LoggedClass):
                     self.log_error(f"❌ {category_name} 카테고리 수집 실패: {e}")
                     results[category_key] = 0
         
+        end_time = time.time()
+        elapsed_time = end_time - start_time
+        
         # 전체 결과 요약
-        total_articles = sum(results.values())
-        self.log_info(f"✅ 모든 카테고리 게시글 수집 완료: {total_articles}개")
+        self.log_info(f"✅ 모든 카테고리 게시글 수집 완료!")
+        self.log_info(f"📊 전체 수집 결과: 게시글 {total_articles}개")
+        self.log_info(f"⏱️  총 소요시간: {elapsed_time:.2f}초")
+        
+        # 카테고리별 상세 결과
+        self.log_info(f"📋 카테고리별 수집 결과:")
+        for category_key, category_name in categories.items():
+            count = results.get(category_key, 0)
+            self.log_info(f"   - {category_name}: {count}개")
         
         return results
     
