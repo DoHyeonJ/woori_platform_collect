@@ -9,6 +9,7 @@ from datetime import datetime
 
 from api.services.async_task_manager import task_manager, TaskType
 from api.services.async_collection_service import AsyncCollectionService
+from api.services.callback_service import callback_service
 
 router = APIRouter(prefix="/async-collection", tags=["비동기 수집"])
 
@@ -17,6 +18,7 @@ class BabitalkCollectionRequest(BaseModel):
     """바비톡 수집 요청 모델"""
     target_date: str = Field(..., description="수집할 날짜 (YYYY-MM-DD)")
     categories: Optional[List[str]] = Field(["reviews", "talks", "event_ask_memos"], description="수집할 카테고리")
+    callback_url: Optional[str] = Field(None, description="수집 완료 시 호출할 콜백 URL")
 
 class GangnamunniCollectionRequest(BaseModel):
     """강남언니 수집 요청 모델"""
@@ -27,6 +29,7 @@ class GangnamunniCollectionRequest(BaseModel):
     )
     save_as_reviews: Optional[bool] = Field(False, description="후기로 저장할지 여부")
     token: Optional[str] = Field(None, description="강남언니 API 토큰 (None이면 기본값 사용)")
+    callback_url: Optional[str] = Field(None, description="수집 완료 시 호출할 콜백 URL")
 
 class NaverCollectionRequest(BaseModel):
     """네이버 수집 요청 모델"""
@@ -35,6 +38,7 @@ class NaverCollectionRequest(BaseModel):
     menu_id: Optional[str] = Field("", description="게시판 ID (빈 문자열이면 모든 게시판)")
     per_page: Optional[int] = Field(20, description="페이지당 게시글 수")
     naver_cookies: Optional[str] = Field("", description="네이버 쿠키")
+    callback_url: Optional[str] = Field(None, description="수집 완료 시 호출할 콜백 URL")
 
 class TaskResponse(BaseModel):
     """작업 응답 모델"""
@@ -65,7 +69,8 @@ async def start_babitalk_collection(request: BabitalkCollectionRequest):
             task_id,
             AsyncCollectionService.collect_babitalk_data,
             request.target_date,
-            request.categories
+            request.categories,
+            request.callback_url
         )
         
         if not success:
@@ -126,7 +131,8 @@ async def start_gangnamunni_collection(request: GangnamunniCollectionRequest):
             request.target_date,
             request.categories,
             request.save_as_reviews,
-            request.token
+            request.token,
+            request.callback_url
         )
         
         if not success:
@@ -177,7 +183,8 @@ async def start_naver_collection(request: NaverCollectionRequest):
             request.target_date,
             request.menu_id,
             request.per_page,
-            request.naver_cookies
+            request.naver_cookies,
+            request.callback_url
         )
         
         if not success:

@@ -9,6 +9,7 @@ from typing import Dict, Any, Optional, Callable
 from collectors.babitalk_collector import BabitalkDataCollector
 from collectors.gannamunni_collector import GangnamUnniDataCollector
 from collectors.naver_collector import NaverDataCollector
+from api.services.callback_service import callback_service
 
 
 class AsyncCollectionService:
@@ -18,6 +19,7 @@ class AsyncCollectionService:
     async def collect_babitalk_data(
         target_date: str,
         categories: list = None,
+        callback_url: str = None,
         progress_callback: Optional[Callable] = None
     ) -> Dict[str, Any]:
         """
@@ -26,11 +28,15 @@ class AsyncCollectionService:
         Args:
             target_date: 수집할 날짜 (YYYY-MM-DD)
             categories: 수집할 카테고리 목록 ["reviews", "talks", "event_ask_memos"]
+            callback_url: 수집 완료 시 호출할 콜백 URL
             progress_callback: 진행률 콜백 함수
             
         Returns:
             Dict[str, Any]: 수집 결과
         """
+        import time
+        start_time = time.time()
+        
         if categories is None:
             categories = ["reviews", "talks", "event_ask_memos"]
         
@@ -104,8 +110,12 @@ class AsyncCollectionService:
             if progress_callback:
                 progress_callback(total_categories, total_categories, "바비톡 데이터 수집 완료")
             
+            end_time = time.time()
+            total_elapsed_time = end_time - start_time
+            
             results["end_time"] = datetime.now().isoformat()
             results["status"] = "success"
+            results["execution_time"] = total_elapsed_time
             
             # 최종 완료 로그 출력
             print(f"🎉 바비톡 데이터 수집 완료!")
@@ -114,13 +124,54 @@ class AsyncCollectionService:
             print(f"   발품후기: {results['total_articles']}개")
             print(f"   자유톡 댓글: {results['total_comments']}개")
             print(f"   수집 시간: {results['start_time']} ~ {results['end_time']}")
+            print(f"   총 소요시간: {total_elapsed_time:.2f}초")
+            
+            # 콜백 URL 호출 (성공 시)
+            if callback_url:
+                await callback_service.send_callback_safe(
+                    callback_url=callback_url,
+                    platform="babitalk",
+                    category=",".join(categories),
+                    target_date=target_date,
+                    result={
+                        "total_articles": results['total_articles'],
+                        "total_comments": results['total_comments'],
+                        "total_reviews": results['total_reviews'],
+                        "execution_time": total_elapsed_time,
+                        "category_results": results["category_results"]
+                    },
+                    is_success=True
+                )
             
             return results
             
         except Exception as e:
+            end_time = time.time()
+            total_elapsed_time = end_time - start_time
+            
             results["end_time"] = datetime.now().isoformat()
             results["status"] = "error"
             results["error"] = str(e)
+            results["execution_time"] = total_elapsed_time
+            
+            print(f"❌ 바비톡 비동기 수집 서비스 실패!")
+            print(f"📋 오류 내용: {str(e)}")
+            print(f"⏱️  실패까지 소요시간: {total_elapsed_time:.2f}초")
+            
+            # 콜백 URL 호출 (실패 시)
+            if callback_url:
+                await callback_service.send_callback_safe(
+                    callback_url=callback_url,
+                    platform="babitalk",
+                    category=",".join(categories) if categories else "error",
+                    target_date=target_date,
+                    result={
+                        "execution_time": total_elapsed_time
+                    },
+                    is_success=False,
+                    error_message=str(e)
+                )
+            
             return results
     
     @staticmethod
@@ -129,6 +180,7 @@ class AsyncCollectionService:
         categories: list = None,
         save_as_reviews: bool = False,
         token: str = None,
+        callback_url: str = None,
         progress_callback: Optional[Callable] = None
     ) -> Dict[str, Any]:
         """
@@ -139,6 +191,7 @@ class AsyncCollectionService:
             categories: 수집할 카테고리 목록
             save_as_reviews: 후기로 저장할지 여부
             token: 강남언니 API 토큰 (None이면 기본값 사용)
+            callback_url: 수집 완료 시 호출할 콜백 URL
             progress_callback: 진행률 콜백 함수
             
         Returns:
@@ -189,12 +242,13 @@ class AsyncCollectionService:
                 if progress_callback:
                     progress_callback(completed_categories, total_categories, f"{category_name} 카테고리 수집 중...")
                 
-                count = await collector.collect_articles_by_date(target_date, category, save_as_reviews)
-                results["total_articles"] += count
-                results["category_results"][category] = count
+                result = await collector.collect_articles_by_date(target_date, category, save_as_reviews)
+                results["total_articles"] += result["articles"]
+                results["total_comments"] += result["comments"]
+                results["category_results"][category] = result["articles"]
                 completed_categories += 1
                 
-                print(f"✅ {category_name} 카테고리 수집 완료: {count}개")
+                print(f"✅ {category_name} 카테고리 수집 완료: {result['articles']}개")
                 
                 await asyncio.sleep(2)  # API 호출 간격 조절
             
@@ -209,7 +263,7 @@ class AsyncCollectionService:
             
             # 수집 완료 로그
             print(f"✅ 강남언니 비동기 수집 서비스 완료!")
-            print(f"📊 전체 수집 결과: 게시글 {results['total_articles']}개")
+            print(f"📊 전체 수집 결과: 게시글 {results['total_articles']}개, 댓글 {results['total_comments']}개")
             print(f"⏱️  총 소요시간: {total_elapsed_time:.2f}초")
             
             # 카테고리별 상세 결과
@@ -218,12 +272,50 @@ class AsyncCollectionService:
                 category_name = category_names.get(category, category)
                 print(f"   - {category_name}: {count}개")
             
+            # 콜백 URL 호출 (성공 시)
+            if callback_url:
+                await callback_service.send_callback_safe(
+                    callback_url=callback_url,
+                    platform="gannamunni",
+                    category=",".join(categories),
+                    target_date=target_date,
+                    result={
+                        "total_articles": results['total_articles'],
+                        "total_comments": results['total_comments'],
+                        "execution_time": total_elapsed_time,
+                        "category_results": results["category_results"]
+                    },
+                    is_success=True
+                )
+            
             return results
             
         except Exception as e:
+            end_time = time.time()
+            total_elapsed_time = end_time - start_time
+            
             results["end_time"] = datetime.now().isoformat()
             results["status"] = "error"
             results["error"] = str(e)
+            
+            print(f"❌ 강남언니 비동기 수집 서비스 실패!")
+            print(f"📋 오류 내용: {str(e)}")
+            print(f"⏱️  실패까지 소요시간: {total_elapsed_time:.2f}초")
+            
+            # 콜백 URL 호출 (실패 시)
+            if callback_url:
+                await callback_service.send_callback_safe(
+                    callback_url=callback_url,
+                    platform="gannamunni",
+                    category=",".join(categories) if categories else "error",
+                    target_date=target_date,
+                    result={
+                        "execution_time": total_elapsed_time
+                    },
+                    is_success=False,
+                    error_message=str(e)
+                )
+            
             return results
     
     @staticmethod
@@ -233,6 +325,7 @@ class AsyncCollectionService:
         menu_id: str = "",
         per_page: int = 20,
         naver_cookies: str = "",
+        callback_url: str = None,
         progress_callback: Optional[Callable] = None
     ) -> Dict[str, Any]:
         """
@@ -244,11 +337,15 @@ class AsyncCollectionService:
             menu_id: 게시판 ID (빈 문자열이면 모든 게시판)
             per_page: 페이지당 게시글 수
             naver_cookies: 네이버 쿠키
+            callback_url: 수집 완료 시 호출할 콜백 URL
             progress_callback: 진행률 콜백 함수
             
         Returns:
             Dict[str, Any]: 수집 결과
         """
+        import time
+        start_time = time.time()
+        
         collector = NaverDataCollector(naver_cookies)
         
         results = {
@@ -297,13 +394,60 @@ class AsyncCollectionService:
             if progress_callback:
                 progress_callback(1, 1, "네이버 카페 데이터 수집 완료")
             
+            end_time = time.time()
+            total_elapsed_time = end_time - start_time
+            
             results["end_time"] = datetime.now().isoformat()
             results["status"] = "success"
+            results["execution_time"] = total_elapsed_time
+            
+            # 콜백 URL 호출 (성공 시)
+            if callback_url:
+                await callback_service.send_callback_safe(
+                    callback_url=callback_url,
+                    platform="naver",
+                    category=menu_id if menu_id else "all_boards",
+                    target_date=target_date or datetime.now().strftime("%Y-%m-%d"),
+                    result={
+                        "total_articles": results['total_articles'],
+                        "total_comments": results.get('total_comments', 0),
+                        "execution_time": total_elapsed_time,
+                        "cafe_id": cafe_id,
+                        "menu_id": menu_id,
+                        "board_results": results.get("board_results", {})
+                    },
+                    is_success=True
+                )
             
             return results
             
         except Exception as e:
+            end_time = time.time()
+            total_elapsed_time = end_time - start_time
+            
             results["end_time"] = datetime.now().isoformat()
             results["status"] = "error"
             results["error"] = str(e)
+            results["execution_time"] = total_elapsed_time
+            
+            print(f"❌ 네이버 비동기 수집 서비스 실패!")
+            print(f"📋 오류 내용: {str(e)}")
+            print(f"⏱️  실패까지 소요시간: {total_elapsed_time:.2f}초")
+            
+            # 콜백 URL 호출 (실패 시)
+            if callback_url:
+                await callback_service.send_callback_safe(
+                    callback_url=callback_url,
+                    platform="naver",
+                    category="error",
+                    target_date=target_date or datetime.now().strftime("%Y-%m-%d"),
+                    result={
+                        "execution_time": total_elapsed_time,
+                        "cafe_id": cafe_id,
+                        "menu_id": menu_id
+                    },
+                    is_success=False,
+                    error_message=str(e)
+                )
+            
             return results

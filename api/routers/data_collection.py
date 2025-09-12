@@ -13,6 +13,7 @@ from api.models import (
 )
 from api.dependencies import get_database_manager
 from database.models import DatabaseManager
+from api.services.callback_service import callback_service
 
 # 수집기 import
 from collectors.gannamunni_collector import GangnamUnniDataCollector
@@ -176,20 +177,21 @@ async def collect_gannamunni_data(
         collector = GangnamUnniDataCollector(token=request.token)
         
         # 강남언니 데이터 수집
-        result = await collector.collect_articles_by_date(
+        collection_result = await collector.collect_articles_by_date(
             target_date=request.target_date,
             category=request.category,
             save_as_reviews=request.save_as_reviews
         )
+        result = collection_result["articles"]
         
         execution_time = time.time() - start_time
         
         # 수집 완료 로그
         print(f"✅ 강남언니 {category_name} 데이터 수집 완료!")
-        print(f"📊 수집 결과: {result}개 {'후기' if request.save_as_reviews else '게시글'}")
+        print(f"📊 수집 결과: 게시글 {result}개, 댓글 {collection_result['comments']}개")
         print(f"⏱️  총 소요시간: {execution_time:.2f}초")
         
-        return CollectionResult(
+        collection_result = CollectionResult(
             platform=PlatformType.GANGNAMUNNI,
             category=request.category,
             target_date=request.target_date,
@@ -202,11 +204,44 @@ async def collect_gannamunni_data(
             timestamp=datetime.now()
         )
         
+        # 콜백 URL 호출 (백그라운드)
+        if request.callback_url:
+            callback_service.send_callback_background(
+                callback_url=request.callback_url,
+                platform="gannamunni",
+                category=request.category,
+                target_date=request.target_date,
+                result={
+                    "total_articles": result,
+                    "total_comments": collection_result["comments"],
+                    "total_reviews": result if request.save_as_reviews else 0,
+                    "execution_time": execution_time
+                },
+                is_success=True
+            )
+        
+        return collection_result
+        
     except Exception as e:
         execution_time = time.time() - start_time
         print(f"❌ 강남언니 {category_name} 데이터 수집 실패!")
         print(f"📋 오류 내용: {str(e)}")
         print(f"⏱️  실패까지 소요시간: {execution_time:.2f}초")
+        
+        # 콜백 URL 호출 (실패 시)
+        if request.callback_url:
+            callback_service.send_callback_background(
+                callback_url=request.callback_url,
+                platform="gannamunni",
+                category=request.category,
+                target_date=request.target_date,
+                result={
+                    "execution_time": execution_time
+                },
+                is_success=False,
+                error_message=str(e)
+            )
+        
         raise HTTPException(
             status_code=500,
             detail=f"강남언니 데이터 수집 실패: {str(e)}"
@@ -236,7 +271,7 @@ async def collect_babitalk_data(
             
             execution_time = time.time() - start_time
             
-            return CollectionResult(
+            collection_result = CollectionResult(
                 platform=PlatformType.BABITALK,
                 category=request.category,
                 target_date=request.target_date,
@@ -248,6 +283,24 @@ async def collect_babitalk_data(
                 message="바비톡 시술후기 수집 완료",
                 timestamp=datetime.now()
             )
+            
+            # 콜백 URL 호출 (백그라운드)
+            if request.callback_url:
+                callback_service.send_callback_background(
+                    callback_url=request.callback_url,
+                    platform="babitalk",
+                    category=request.category,
+                    target_date=request.target_date,
+                    result={
+                        "total_articles": 0,
+                        "total_comments": 0,
+                        "total_reviews": result,
+                        "execution_time": execution_time
+                    },
+                    is_success=True
+                )
+            
+            return collection_result
             
         elif request.category == "event_ask_memo":
             # 발품후기 수집 (카테고리 ID 필요)
@@ -265,7 +318,7 @@ async def collect_babitalk_data(
             
             execution_time = time.time() - start_time
             
-            return CollectionResult(
+            collection_result = CollectionResult(
                 platform=PlatformType.BABITALK,
                 category=request.category,
                 target_date=request.target_date,
@@ -277,6 +330,25 @@ async def collect_babitalk_data(
                 message=f"바비톡 발품후기 수집 완료 (카테고리: {request.category_id})",
                 timestamp=datetime.now()
             )
+            
+            # 콜백 URL 호출 (백그라운드)
+            if request.callback_url:
+                callback_service.send_callback_background(
+                    callback_url=request.callback_url,
+                    platform="babitalk",
+                    category=request.category,
+                    target_date=request.target_date,
+                    result={
+                        "total_articles": 0,
+                        "total_comments": 0,
+                        "total_reviews": result,
+                        "execution_time": execution_time,
+                        "category_id": str(request.category_id)
+                    },
+                    is_success=True
+                )
+            
+            return collection_result
             
         elif request.category == "talk":
             # 자유톡 수집 (서비스 ID 필요, 댓글 자동 수집)
@@ -302,7 +374,7 @@ async def collect_babitalk_data(
             
             execution_time = time.time() - start_time
             
-            return CollectionResult(
+            collection_result = CollectionResult(
                 platform=PlatformType.BABITALK,
                 category=request.category,
                 target_date=request.target_date,
@@ -314,6 +386,25 @@ async def collect_babitalk_data(
                 message=f"바비톡 자유톡 수집 완료 (서비스: {request.service_id}), 댓글 {comments_result}개 자동 수집",
                 timestamp=datetime.now()
             )
+            
+            # 콜백 URL 호출 (백그라운드)
+            if request.callback_url:
+                callback_service.send_callback_background(
+                    callback_url=request.callback_url,
+                    platform="babitalk",
+                    category=request.category,
+                    target_date=request.target_date,
+                    result={
+                        "total_articles": talks_result,
+                        "total_comments": comments_result,
+                        "total_reviews": 0,
+                        "execution_time": execution_time,
+                        "service_id": str(request.service_id)
+                    },
+                    is_success=True
+                )
+            
+            return collection_result
         else:
             raise HTTPException(
                 status_code=400,
@@ -322,6 +413,21 @@ async def collect_babitalk_data(
             
     except Exception as e:
         execution_time = time.time() - start_time
+        
+        # 콜백 URL 호출 (실패 시)
+        if request.callback_url:
+            callback_service.send_callback_background(
+                callback_url=request.callback_url,
+                platform="babitalk",
+                category=request.category,
+                target_date=request.target_date,
+                result={
+                    "execution_time": execution_time
+                },
+                is_success=False,
+                error_message=str(e)
+            )
+        
         raise HTTPException(
             status_code=500,
             detail=f"바비톡 데이터 수집 실패: {str(e)}"
@@ -372,7 +478,7 @@ async def collect_naver_data(
                 
                 execution_time = time.time() - start_time
                 
-                return CollectionResult(
+                collection_result = CollectionResult(
                     platform=PlatformType.NAVER,
                     category="by_date",
                     target_date=target_date,
@@ -384,6 +490,26 @@ async def collect_naver_data(
                     message=f"네이버 카페 {cafe_id} {target_date} 날짜별 전체 수집 완료 (게시글: {result.get('saved', 0)}개, 댓글: {result.get('comments_saved', 0)}개)",
                     timestamp=datetime.now()
                 )
+                
+                # 콜백 URL 호출 (백그라운드)
+                if request.callback_url:
+                    callback_service.send_callback_background(
+                        callback_url=request.callback_url,
+                        platform="naver",
+                        category="by_date",
+                        target_date=target_date,
+                        result={
+                            "total_articles": result.get('saved', 0),
+                            "total_comments": result.get('comments_saved', 0),
+                            "total_reviews": 0,
+                            "execution_time": execution_time,
+                            "cafe_id": cafe_id,
+                            "menu_id": menu_id
+                        },
+                        is_success=True
+                    )
+                
+                return collection_result
             else:
                 # 날짜별 제한 수집 (댓글 포함)
                 result = await collector.collect_articles_with_content_and_comments(
@@ -395,7 +521,7 @@ async def collect_naver_data(
                 
                 execution_time = time.time() - start_time
                 
-                return CollectionResult(
+                collection_result = CollectionResult(
                     platform=PlatformType.NAVER,
                     category="by_date",
                     target_date=target_date,
@@ -407,6 +533,27 @@ async def collect_naver_data(
                     message=f"네이버 카페 {cafe_id} {target_date} 날짜별 제한 수집 완료 (게시글: {result.get('saved', 0)}개, 댓글: {result.get('comments_saved', 0)}개)",
                     timestamp=datetime.now()
                 )
+                
+                # 콜백 URL 호출 (백그라운드)
+                if request.callback_url:
+                    callback_service.send_callback_background(
+                        callback_url=request.callback_url,
+                        platform="naver",
+                        category="by_date",
+                        target_date=target_date,
+                        result={
+                            "total_articles": result.get('saved', 0),
+                            "total_comments": result.get('comments_saved', 0),
+                            "total_reviews": 0,
+                            "execution_time": execution_time,
+                            "cafe_id": cafe_id,
+                            "menu_id": menu_id,
+                            "limit": limit
+                        },
+                        is_success=True
+                    )
+                
+                return collection_result
         else:
             # target_date가 없는 경우 최신 게시글 수집
             if request.menu_id:
@@ -420,7 +567,7 @@ async def collect_naver_data(
                 
                 execution_time = time.time() - start_time
                 
-                return CollectionResult(
+                collection_result = CollectionResult(
                     platform=PlatformType.NAVER,
                     category="specific_board",
                     target_date=request.target_date,
@@ -432,6 +579,26 @@ async def collect_naver_data(
                     message=f"네이버 카페 {cafe_id} 게시판 {request.menu_id} 최신 수집 완료 (게시글: {result.get('saved', 0)}개, 댓글: {result.get('comments_saved', 0)}개)",
                     timestamp=datetime.now()
                 )
+                
+                # 콜백 URL 호출 (백그라운드)
+                if request.callback_url:
+                    callback_service.send_callback_background(
+                        callback_url=request.callback_url,
+                        platform="naver",
+                        category="specific_board",
+                        target_date=request.target_date or datetime.now().strftime("%Y-%m-%d"),
+                        result={
+                            "total_articles": result.get('saved', 0),
+                            "total_comments": result.get('comments_saved', 0),
+                            "total_reviews": 0,
+                            "execution_time": execution_time,
+                            "cafe_id": cafe_id,
+                            "menu_id": request.menu_id
+                        },
+                        is_success=True
+                    )
+                
+                return collection_result
             else:
                 # 전체 게시판 수집
                 results = await collector.collect_all_boards_articles(
@@ -441,11 +608,12 @@ async def collect_naver_data(
                 
                 total_articles = sum(results.values())
                 execution_time = time.time() - start_time
+                current_date = datetime.now().strftime("%Y-%m-%d")
                 
-                return CollectionResult(
+                collection_result = CollectionResult(
                     platform=PlatformType.NAVER,
                     category="all_boards",
-                    target_date=datetime.now().strftime("%Y-%m-%d"),
+                    target_date=current_date,
                     total_articles=total_articles,
                     total_comments=0,
                     total_reviews=0,
@@ -454,11 +622,48 @@ async def collect_naver_data(
                     message=f"네이버 카페 {cafe_id} 전체 게시판 최신 수집 완료 (총 {total_articles}개)",
                     timestamp=datetime.now()
                 )
+                
+                # 콜백 URL 호출 (백그라운드)
+                if request.callback_url:
+                    callback_service.send_callback_background(
+                        callback_url=request.callback_url,
+                        platform="naver",
+                        category="all_boards",
+                        target_date=current_date,
+                        result={
+                            "total_articles": total_articles,
+                            "total_comments": 0,
+                            "total_reviews": 0,
+                            "execution_time": execution_time,
+                            "cafe_id": cafe_id,
+                            "board_results": results
+                        },
+                        is_success=True
+                    )
+                
+                return collection_result
             
     except HTTPException:
         raise
     except Exception as e:
         execution_time = time.time() - start_time
+        
+        # 콜백 URL 호출 (실패 시)
+        if request.callback_url:
+            callback_service.send_callback_background(
+                callback_url=request.callback_url,
+                platform="naver",
+                category="error",
+                target_date=request.target_date or datetime.now().strftime("%Y-%m-%d"),
+                result={
+                    "execution_time": execution_time,
+                    "cafe_id": request.cafe_id,
+                    "menu_id": request.menu_id
+                },
+                is_success=False,
+                error_message=str(e)
+            )
+        
         raise HTTPException(
             status_code=500,
             detail=f"네이버 데이터 수집 실패: {str(e)}"

@@ -61,6 +61,7 @@ class GangnamUnniCollectionRequest(BaseModel):
     save_as_reviews: bool = Field(False, description="후기 테이블에 저장할지 여부")
     limit: int = Field(24, ge=1, le=100, description="페이지당 수집할 데이터 수 (1-100)")
     token: Optional[str] = Field(None, description="강남언니 API 토큰 (None이면 기본값 사용)")
+    callback_url: Optional[str] = Field(None, description="수집 완료 시 호출할 콜백 URL")
 
 class BabitalkCollectionRequest(BaseModel):
     """바비톡 데이터 수집 요청 모델"""
@@ -71,6 +72,7 @@ class BabitalkCollectionRequest(BaseModel):
     category_id: Optional[BabitalkEventAskCategory] = Field(None, description="발품후기 카테고리 ID (category가 event_ask_memo일 때 필요)")
     # 자유톡 서비스별 수집 시 사용
     service_id: Optional[BabitalkTalkService] = Field(None, description="자유톡 서비스 ID (category가 talk일 때 필요)")
+    callback_url: Optional[str] = Field(None, description="수집 완료 시 호출할 콜백 URL")
 
 class NaverCollectionRequest(BaseModel):
     """네이버 카페 데이터 수집 요청 모델"""
@@ -79,6 +81,7 @@ class NaverCollectionRequest(BaseModel):
     menu_id: Optional[str] = Field("38", description="특정 게시판 ID (비워두면 전체 게시판)")
     limit: int = Field(20, ge=0, le=100, description="수집할 데이터 수 (0: 제한없음, 1-100: 지정된 수만큼)")
     cookies: str = Field("", description="네이버 로그인 쿠키 (예: NID_AUT=...; NID_SES=...)")
+    callback_url: Optional[str] = Field(None, description="수집 완료 시 호출할 콜백 URL")
 
 # 응답 모델들
 class CollectionResult(BaseModel):
