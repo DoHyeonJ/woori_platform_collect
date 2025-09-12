@@ -188,6 +188,23 @@ class SQLAlchemyDatabaseManager:
         finally:
             session.close()
     
+    def get_review_by_platform_id_and_platform_review_id(self, platform_id: str, platform_review_id: str) -> Optional[Dict]:
+        """플랫폼 ID와 플랫폼 후기 ID로 후기 조회"""
+        session = self.get_session()
+        try:
+            review = session.query(Review).filter(
+                and_(
+                    Review.platform_id == platform_id,
+                    Review.platform_review_id == platform_review_id
+                )
+            ).first()
+            
+            if review:
+                return self._review_to_dict(review)
+            return None
+        finally:
+            session.close()
+    
     def get_articles_by_filters(self, filters: Dict, limit: int = 20, offset: int = 0) -> List[Dict]:
         """필터 조건에 따라 게시글 조회"""
         session = self.get_session()
@@ -542,12 +559,12 @@ class SQLAlchemyDatabaseManager:
         }
     
     def get_comment_by_article_id_and_comment_id(self, article_id: str, comment_id: str) -> Optional[Dict[str, Any]]:
-        """게시글 ID와 댓글 ID로 댓글 조회 (하위 호환성)"""
+        """게시글 ID와 댓글 ID로 댓글 조회"""
         session = self.get_session()
         try:
             comment = session.query(Comment).filter(
                 and_(
-                    Comment.community_article_id == article_id,
+                    Comment.article_id == int(article_id),
                     Comment.community_comment_id == comment_id
                 )
             ).first()

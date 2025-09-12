@@ -105,6 +105,12 @@ class BabitalkDataCollector(LoggedClass):
             total_reviews = 0
             for review in reviews:
                 try:
+                    # 중복 체크: 이미 저장된 후기인지 확인
+                    existing_review = self.db.get_review_by_platform_id_and_platform_review_id("babitalk", str(review.id))
+                    if existing_review:
+                        self.log_info(f"⏭️  후기 {review.id}는 이미 저장되어 있습니다. 건너뜀")
+                        continue
+                    
                     # 후기 정보 저장
                     review_id = await self._save_review(review, babitalk_community['id'])
                     if review_id:
@@ -148,6 +154,12 @@ class BabitalkDataCollector(LoggedClass):
             total_memos = 0
             for memo in memos:
                 try:
+                    # 중복 체크: 이미 저장된 발품후기인지 확인
+                    existing_article = self.db.get_article_by_platform_id_and_community_article_id("babitalk_event_ask", str(memo.id))
+                    if existing_article:
+                        self.log_info(f"⏭️  발품후기 {memo.id}는 이미 저장되어 있습니다. 건너뜀")
+                        continue
+                    
                     # 발품후기 정보 저장
                     memo_id = await self._save_event_ask_memo(memo, babitalk_community['id'])
                     if memo_id:
@@ -223,6 +235,12 @@ class BabitalkDataCollector(LoggedClass):
             total_talks = 0
             for talk in talks:
                 try:
+                    # 중복 체크: 이미 저장된 자유톡인지 확인
+                    existing_article = self.db.get_article_by_platform_id_and_community_article_id("babitalk_talk", str(talk.id))
+                    if existing_article:
+                        self.log_info(f"⏭️  자유톡 {talk.id}는 이미 저장되어 있습니다. 건너뜀")
+                        continue
+                    
                     # 자유톡 정보 저장
                     talk_id = await self._save_talk(talk, babitalk_community['id'])
                     if talk_id:
@@ -345,11 +363,15 @@ class BabitalkDataCollector(LoggedClass):
             # 각 자유톡의 댓글 수집
             for talk in talks:
                 try:
-                    comments_count = await self.collect_comments_for_talk(talk.id)
-                    total_comments += comments_count
+                    # 중복 체크: 이미 저장된 자유톡인지 확인
+                    existing_article = self.db.get_article_by_platform_id_and_community_article_id("babitalk_talk", str(talk.id))
+                    if not existing_article:
+                        print(f"⏭️  자유톡 {talk.id}는 데이터베이스에 없습니다. 댓글 수집 건너뜀")
+                        continue
                     
-                    # 자유톡 간 딜레이 (서버 부하 방지)
-                    await asyncio.sleep(1)
+                    # 이미 저장된 게시글이면 댓글도 이미 수집되었을 가능성이 높으므로 건너뜀
+                    print(f"⏭️  자유톡 {talk.id}는 이미 저장되어 있습니다. 댓글 수집 건너뜀")
+                    continue
                     
                 except Exception as e:
                     print(f"⚠️  자유톡 ID {talk.id} 댓글 수집 실패: {e}")
@@ -563,6 +585,12 @@ class BabitalkDataCollector(LoggedClass):
             try:
                 # 삭제된 댓글이나 블라인드된 댓글은 건너뛰기
                 if comment.is_del == 1 or comment.blind_at:
+                    continue
+                
+                # 중복 체크: 이미 저장된 댓글인지 확인
+                existing_comment = self.db.get_comment_by_article_id_and_comment_id(str(article_id), str(comment.id))
+                if existing_comment:
+                    print(f"        ⏭️  댓글 {comment.id}는 이미 저장되어 있습니다. 건너뜀")
                     continue
                 
                 # 날짜 파싱

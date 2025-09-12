@@ -47,6 +47,12 @@ class GangnamUnniDataCollector(LoggedClass):
             
             for i, article in enumerate(articles):
                 try:
+                    # 중복 체크: 이미 저장된 게시글인지 확인
+                    existing_article = self.db.get_article_by_platform_id_and_community_article_id("gangnamunni", str(article.id))
+                    if existing_article:
+                        self.log_info(f"⏭️  게시글 {article.id}는 이미 저장되어 있습니다. 건너뜀")
+                        continue
+                    
                     # 게시글 정보 저장
                     if save_as_reviews:
                         article_id = await self._save_as_review(article, gangnamunni_community['id'])
