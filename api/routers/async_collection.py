@@ -35,8 +35,7 @@ class NaverCollectionRequest(BaseModel):
     """네이버 수집 요청 모델"""
     cafe_id: str = Field(..., description="카페 ID")
     target_date: Optional[str] = Field(None, description="수집할 날짜 (YYYY-MM-DD), None이면 최신 게시글")
-    menu_id: Optional[str] = Field("", description="게시판 ID (빈 문자열이면 모든 게시판)")
-    per_page: Optional[int] = Field(20, description="페이지당 게시글 수")
+    menu_id: Optional[str] = Field("", description="게시판 ID (콤마로 구분하여 여러 게시판 선택 가능, 예: '38,39,40')")
     naver_cookies: Optional[str] = Field("", description="네이버 쿠키")
     callback_url: Optional[str] = Field(None, description="수집 완료 시 호출할 콜백 URL")
 
@@ -170,7 +169,6 @@ async def start_naver_collection(request: NaverCollectionRequest):
                 "cafe_id": request.cafe_id,
                 "target_date": request.target_date,
                 "menu_id": request.menu_id,
-                "per_page": request.per_page,
                 "naver_cookies": request.naver_cookies
             }
         )
@@ -182,7 +180,6 @@ async def start_naver_collection(request: NaverCollectionRequest):
             request.cafe_id,
             request.target_date,
             request.menu_id,
-            request.per_page,
             request.naver_cookies,
             request.callback_url
         )

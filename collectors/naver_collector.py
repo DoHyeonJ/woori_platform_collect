@@ -159,12 +159,27 @@ class NaverDataCollector(LoggedClass):
             return {"total": 0, "saved": 0, "failed": 0, "details": [], "error": str(e)}
     
     async def collect_articles_with_content_and_comments(self, cafe_id: str, menu_id: str = "", per_page: int = 20, target_date: Optional[str] = None) -> Dict[str, Any]:
-        """게시글을 상세 내용과 댓글과 함께 수집하고 데이터베이스에 저장"""
+        """게시글을 상세 내용과 댓글과 함께 수집하고 데이터베이스에 저장 (여러 게시판 지원)"""
         try:
             self.log_info(f"상세 내용과 댓글과 함께 게시글 수집 시작 (카페 ID: {cafe_id}, 메뉴 ID: {menu_id}, 날짜: {target_date})")
             
-            # 게시글과 댓글 함께 조회
-            articles_data = await self.api.get_articles_with_content_and_comments(cafe_id, menu_id, per_page, target_date)
+            # 여러 게시판 지원: menu_id에 콤마가 있으면 여러 게시판 조회
+            if ',' in menu_id:
+                # 여러 게시판의 경우 각각 조회 후 합치기
+                menu_list = [mid.strip() for mid in menu_id.split(',') if mid.strip()]
+                all_articles_data = []
+                
+                for single_menu_id in menu_list:
+                    self.log_info(f"게시판 {single_menu_id} 조회 중...")
+                    articles_data = await self.api.get_articles_with_content_and_comments(cafe_id, single_menu_id, per_page, target_date)
+                    if articles_data:
+                        all_articles_data.extend(articles_data)
+                        self.log_info(f"게시판 {single_menu_id}: {len(articles_data)}개 게시글 조회 완료")
+                
+                articles_data = all_articles_data
+            else:
+                # 단일 게시판 조회
+                articles_data = await self.api.get_articles_with_content_and_comments(cafe_id, menu_id, per_page, target_date)
             
             if not articles_data:
                 self.log_warning("수집된 게시글이 없습니다")
@@ -182,6 +197,12 @@ class NaverDataCollector(LoggedClass):
                     
                     article = article_data['article']
                     comments = article_data['comments']
+                    
+                    # 중복 체크: 이미 저장된 게시글인지 먼저 확인
+                    existing_article = self.db.get_article_by_platform_id_and_community_article_id("naver", article.article_id)
+                    if existing_article:
+                        self.log_info(f"⏭️  게시글 {article.article_id}는 이미 저장되어 있습니다. 건너뜀")
+                        continue
                     
                     # 게시글 저장
                     if await self._save_article(cafe_id, article):
@@ -236,12 +257,27 @@ class NaverDataCollector(LoggedClass):
             return {"total": 0, "saved": 0, "failed": 0, "comments_saved": 0, "details": [], "error": str(e)}
     
     async def collect_articles_by_menu(self, cafe_id: str, menu_id: str = "", per_page: int = 20) -> int:
-        """특정 게시판의 게시글 수집"""
+        """특정 게시판의 게시글 수집 (여러 게시판 지원)"""
         try:
             self.log_info(f"게시글 수집 시작 (카페 ID: {cafe_id}, 메뉴 ID: {menu_id})")
             
-            # 게시글과 내용 함께 조회
-            articles = await self.api.get_articles_with_content(cafe_id, menu_id, per_page)
+            # 여러 게시판 지원: menu_id에 콤마가 있으면 여러 게시판 조회
+            if ',' in menu_id:
+                # 여러 게시판의 경우 각각 조회 후 합치기
+                menu_list = [mid.strip() for mid in menu_id.split(',') if mid.strip()]
+                all_articles = []
+                
+                for single_menu_id in menu_list:
+                    self.log_info(f"게시판 {single_menu_id} 조회 중...")
+                    articles = await self.api.get_articles_with_content(cafe_id, single_menu_id, per_page)
+                    if articles:
+                        all_articles.extend(articles)
+                        self.log_info(f"게시판 {single_menu_id}: {len(articles)}개 게시글 조회 완료")
+                
+                articles = all_articles
+            else:
+                # 단일 게시판 조회
+                articles = await self.api.get_articles_with_content(cafe_id, menu_id, per_page)
             
             if not articles:
                 self.log_warning("수집된 게시글이 없습니다")
@@ -251,6 +287,12 @@ class NaverDataCollector(LoggedClass):
             saved_count = 0
             for article in articles:
                 try:
+                    # 중복 체크: 이미 저장된 게시글인지 먼저 확인
+                    existing_article = self.db.get_article_by_platform_id_and_community_article_id("naver", article.article_id)
+                    if existing_article:
+                        self.log_info(f"⏭️  게시글 {article.article_id}는 이미 저장되어 있습니다. 건너뜀")
+                        continue
+                    
                     if await self._save_article(cafe_id, article):
                         saved_count += 1
                 except Exception as e:
@@ -265,9 +307,9 @@ class NaverDataCollector(LoggedClass):
             return 0
     
     async def collect_articles_by_date_with_comments(self, cafe_id: str, target_date: str, menu_id: str = "") -> Dict[str, Any]:
-        """특정 날짜의 모든 게시글을 수집하고 댓글까지 포함하여 저장"""
+        """특정 날짜의 모든 게시글을 수집하고 댓글까지 포함하여 저장 (여러 게시판 지원)"""
         try:
-            self.log_info(f"날짜별 게시글과 댓글 전체 수집 시작 (카페 ID: {cafe_id}, 날짜: {target_date})")
+            self.log_info(f"날짜별 게시글과 댓글 전체 수집 시작 (카페 ID: {cafe_id}, 날짜: {target_date}, 게시판: {menu_id})")
             
             # 날짜를 datetime 객체로 변환
             from datetime import datetime
@@ -287,7 +329,11 @@ class NaverDataCollector(LoggedClass):
                 try:
                     self.log_info(f"게시글 목록 조회 중... (페이지: {page}) - 대상 날짜: {target_datetime.date()}")
                     
-                    articles = await self.api.get_article_list(cafe_id, menu_id, page, per_page)
+                    # 여러 게시판 지원: menu_id에 콤마가 있으면 여러 게시판 조회
+                    if ',' in menu_id:
+                        articles = await self.api.get_article_list_multi_menus(cafe_id, menu_id, page, per_page)
+                    else:
+                        articles = await self.api.get_article_list(cafe_id, menu_id, page, per_page)
                     
                     if not articles:
                         self.log_info(f"페이지 {page}에서 더 이상 게시글이 없습니다")
@@ -361,6 +407,12 @@ class NaverDataCollector(LoggedClass):
                 try:
                     self.log_info(f"게시글 {i+1}/{len(all_articles)} 처리 중... (ID: {article.article_id})")
                     
+                    # 중복 체크: 이미 저장된 게시글인지 먼저 확인
+                    existing_article = self.db.get_article_by_platform_id_and_community_article_id("naver", article.article_id)
+                    if existing_article:
+                        self.log_info(f"⏭️  게시글 {article.article_id}는 이미 저장되어 있습니다. 건너뜀")
+                        continue
+                    
                     # 게시글 내용 조회
                     content_html, created_at = await self.api.get_article_content(cafe_id, article.article_id)
                     if content_html:
@@ -403,7 +455,7 @@ class NaverDataCollector(LoggedClass):
                             "article_id": article.article_id,
                             "title": article.subject,
                             "status": "failed",
-                            "reason": "이미 저장된 게시글이거나 저장 실패"
+                            "reason": "저장 실패"
                         })
                     
                     # API 호출 간격 조절
@@ -514,12 +566,6 @@ class NaverDataCollector(LoggedClass):
             cafe_name = self.api.get_cafe_name_by_id(cafe_id)
             if not cafe_name:
                 cafe_name = f"카페_{cafe_id}"
-            
-            # 이미 저장된 게시글인지 확인
-            existing = self.db.get_article_by_platform_id_and_community_article_id("naver", article.article_id)
-            if existing:
-                self.log_info(f"게시글 {article.article_id}는 이미 저장되어 있습니다")
-                return False
             
             # Article 객체 생성
             db_article = Article(

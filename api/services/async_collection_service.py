@@ -323,7 +323,6 @@ class AsyncCollectionService:
         cafe_id: str,
         target_date: str = None,
         menu_id: str = "",
-        per_page: int = 20,
         naver_cookies: str = "",
         callback_url: str = None,
         progress_callback: Optional[Callable] = None
@@ -335,7 +334,6 @@ class AsyncCollectionService:
             cafe_id: 카페 ID
             target_date: 수집할 날짜 (YYYY-MM-DD) - None이면 최신 게시글
             menu_id: 게시판 ID (빈 문자열이면 모든 게시판)
-            per_page: 페이지당 게시글 수
             naver_cookies: 네이버 쿠키
             callback_url: 수집 완료 시 호출할 콜백 URL
             progress_callback: 진행률 콜백 함수
@@ -379,7 +377,7 @@ class AsyncCollectionService:
                     if progress_callback:
                         progress_callback(0, 1, f"게시판 {menu_id} 최신 게시글 수집 중...")
                     
-                    count = await collector.collect_articles_by_menu(cafe_id, menu_id, per_page)
+                    count = await collector.collect_articles_by_menu(cafe_id, menu_id, 20)
                     results["total_articles"] = count
                     results["board_results"][menu_id] = count
                 else:
@@ -387,7 +385,7 @@ class AsyncCollectionService:
                     if progress_callback:
                         progress_callback(0, 1, "모든 게시판 최신 게시글 수집 중...")
                     
-                    board_results = await collector.collect_all_boards_articles(cafe_id, per_page)
+                    board_results = await collector.collect_all_boards_articles(cafe_id, 20)
                     results["total_articles"] = sum(board_results.values())
                     results["board_results"] = board_results
             

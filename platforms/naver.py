@@ -195,6 +195,51 @@ class NaverCafeAPI(LoggedClass):
             self.log_error(f"상세 오류: {traceback.format_exc()}")
             return []
     
+    async def get_article_list_multi_menus(self, cafe_id: str, menu_ids: str, page: int = 1, per_page: int = 20) -> List[NaverCafeArticle]:
+        """여러 게시판의 게시글 목록 조회 (콤마로 구분된 menu_id)"""
+        try:
+            # menu_ids를 콤마로 분리하고 공백 제거
+            menu_list = [menu_id.strip() for menu_id in menu_ids.split(',') if menu_id.strip()]
+            
+            if not menu_list:
+                self.log_warning("유효한 menu_id가 없습니다")
+                return []
+            
+            self.log_info(f"여러 게시판 게시글 목록 조회 시작 (카페 ID: {cafe_id}, 게시판: {menu_list})")
+            
+            all_articles = []
+            
+            # 각 게시판별로 병렬 처리
+            tasks = []
+            for menu_id in menu_list:
+                task = self.get_article_list(cafe_id, menu_id, page, per_page)
+                tasks.append(task)
+            
+            # 모든 게시판의 결과를 병렬로 조회
+            results = await asyncio.gather(*tasks, return_exceptions=True)
+            
+            # 결과 합치기
+            for i, result in enumerate(results):
+                if isinstance(result, Exception):
+                    self.log_error(f"게시판 {menu_list[i]} 조회 실패: {result}")
+                    continue
+                
+                if result:
+                    all_articles.extend(result)
+                    self.log_info(f"게시판 {menu_list[i]}: {len(result)}개 게시글 조회 완료")
+            
+            # 게시글 ID 순으로 정렬 (중복 제거는 하지 않음 - 같은 게시글이 여러 게시판에 있을 수 있음)
+            all_articles.sort(key=lambda x: x.article_id)
+            
+            self.log_info(f"전체 {len(all_articles)}개 게시글 조회 완료 (게시판 {len(menu_list)}개)")
+            return all_articles
+            
+        except Exception as e:
+            self.log_error(f"여러 게시판 게시글 목록 조회 중 오류 발생: {str(e)}")
+            import traceback
+            self.log_error(f"상세 오류: {traceback.format_exc()}")
+            return []
+    
     async def get_article_content(self, cafe_id: str, article_id: str, retry_count: int = 0) -> Optional[tuple[str, datetime]]:
         """게시글 내용 조회 (재시도 로직 포함)"""
         try:

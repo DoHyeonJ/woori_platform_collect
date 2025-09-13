@@ -78,7 +78,7 @@ class NaverCollectionRequest(BaseModel):
     """네이버 카페 데이터 수집 요청 모델"""
     cafe_id: str = Field("12285441", description="카페 ID (예: 10912875)")
     target_date: Optional[str] = Field(None, description="수집할 날짜 (YYYY-MM-DD, 비워두면 오늘 날짜)")
-    menu_id: Optional[str] = Field("38", description="특정 게시판 ID (비워두면 전체 게시판)")
+    menu_id: Optional[str] = Field("38", description="게시판 ID (콤마로 구분하여 여러 게시판 선택 가능, 예: '38,39,40')")
     limit: int = Field(20, ge=0, le=100, description="수집할 데이터 수 (0: 제한없음, 1-100: 지정된 수만큼)")
     cookies: str = Field("", description="네이버 로그인 쿠키 (예: NID_AUT=...; NID_SES=...)")
     callback_url: Optional[str] = Field(None, description="수집 완료 시 호출할 콜백 URL")
