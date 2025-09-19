@@ -767,7 +767,7 @@ class GangnamUnniAPI(LoggedClass):
             self.log_error(f"게시글 검색 실패: {e}")
             return []
 
-    async def get_reviews(self, page_index: int = 0, page_size: int = 20, sort: str = "RECENT_POSTED_AT") -> List[Review]:
+    async def get_reviews(self, page_index: int = 0, page_size: int = 20, sort: str = "RECENT_POSTED_AT", keyword: str = "성형") -> List[Review]:
         """
         강남언니 리뷰 목록을 가져옵니다.
         
@@ -775,6 +775,7 @@ class GangnamUnniAPI(LoggedClass):
             page_index: 페이지 인덱스 (기본값: 0)
             page_size: 페이지당 리뷰 수 (기본값: 20)
             sort: 정렬 방식 (기본값: "RECENT_POSTED_AT")
+            keyword: 검색 키워드 (기본값: "성형" - 모든 리뷰 조회용)
         
         Returns:
             List[Review]: 리뷰 목록
@@ -797,7 +798,7 @@ class GangnamUnniAPI(LoggedClass):
                     "hasPhotos": False,
                     "procedureProofApproved": False
                 },
-                "keyword": "",
+                "keyword": "고민",
                 "pagination": {
                     "pageIndex": page_index,
                     "pageSize": page_size,
@@ -1164,16 +1165,14 @@ async def test_get_reviews():
     # get_reviews 함수 호출 테스트
     logger.info(f"\n🧪 get_reviews 함수 호출 테스트")
     try:
-        reviews = await api.get_reviews(page_index=0, page_size=50)
+        reviews = await api.get_reviews(page_index=100, page_size=20)
         logger.info(f"📊 get_reviews 결과: {len(reviews)}개 리뷰 수집됨")
         if reviews:
-            print(reviews)
+            # print(reviews)
             # logger.info(f"📝 첫 번째 리뷰 정보:")
             # first_review = reviews[0]
-            # logger.info(first_review)
-            # logger.info(f"   작성자: {getattr(first_review, 'writer', {}).get('nickname', 'N/A') if hasattr(first_review, 'writer') else 'N/A'}")
-            # logger.info(f"   내용 미리보기: {getattr(first_review, 'contents', '')[:100]}...")
-            # logger.info(f"   작성시간: {getattr(first_review, 'postedAtUtc', 'N/A')}")
+            pass
+            
     except Exception as e:
         logger.error(f"❌ get_reviews 테스트 중 오류 발생: {e}")
 
