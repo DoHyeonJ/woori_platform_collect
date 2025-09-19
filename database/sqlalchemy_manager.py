@@ -662,13 +662,15 @@ class SQLAlchemyDatabaseManager:
             if not data_types or 'review' in data_types:
                 review_query = session.query(Review)
                 
-                # 후기용 키워드 조건 (title과 content 모두 검색)
+                # 후기용 키워드 조건 (title, content, hospital_name, doctor_name 모두 검색)
                 review_keyword_conditions = []
                 for keyword in keywords:
                     review_keyword_conditions.append(
                         or_(
                             Review.title.like(f'%{keyword}%'),
-                            Review.content.like(f'%{keyword}%')
+                            Review.content.like(f'%{keyword}%'),
+                            Review.hospital_name.like(f'%{keyword}%'),
+                            Review.doctor_name.like(f'%{keyword}%')
                         )
                     )
                 
@@ -676,13 +678,23 @@ class SQLAlchemyDatabaseManager:
                     review_query = review_query.filter(or_(*review_keyword_conditions))
                 
                 if platforms:
-                    review_query = review_query.filter(Review.platform_id.in_(platforms))
+                    # gangnamunni, babitalk로 검색할 때 각각의 _review도 포함하도록 수정
+                    platform_filters = []
+                    for platform in platforms:
+                        if platform in ["gangnamunni", "babitalk"]:
+                            platform_filters.extend([platform, f"{platform}_review"])
+                        else:
+                            platform_filters.append(platform)
+                    review_query = review_query.filter(Review.platform_id.in_(platform_filters))
                 
                 if start_date:
                     review_query = review_query.filter(func.date(Review.created_at) >= start_date)
                 
                 if end_date:
-                    review_query = review_query.filter(func.date(Review.created_at) <= end_date)
+                    # end_date에 23:59:59까지 포함하도록 수정
+                    from datetime import datetime, time
+                    end_datetime = datetime.strptime(end_date, '%Y-%m-%d').replace(hour=23, minute=59, second=59)
+                    review_query = review_query.filter(Review.created_at <= end_datetime)
                 
                 reviews = review_query.order_by(desc(Review.created_at)).offset(offset).limit(limit).all()
                 results['reviews'] = [self._review_to_dict(review) for review in reviews]
@@ -767,13 +779,15 @@ class SQLAlchemyDatabaseManager:
             if not data_types or 'review' in data_types:
                 review_query = session.query(Review)
                 
-                # 후기용 키워드 조건 (title과 content 모두 검색)
+                # 후기용 키워드 조건 (title, content, hospital_name, doctor_name 모두 검색)
                 review_keyword_conditions = []
                 for keyword in keywords:
                     review_keyword_conditions.append(
                         or_(
                             Review.title.like(f'%{keyword}%'),
-                            Review.content.like(f'%{keyword}%')
+                            Review.content.like(f'%{keyword}%'),
+                            Review.hospital_name.like(f'%{keyword}%'),
+                            Review.doctor_name.like(f'%{keyword}%')
                         )
                     )
                 
@@ -781,13 +795,23 @@ class SQLAlchemyDatabaseManager:
                     review_query = review_query.filter(or_(*review_keyword_conditions))
                 
                 if platforms:
-                    review_query = review_query.filter(Review.platform_id.in_(platforms))
+                    # gangnamunni, babitalk로 검색할 때 각각의 _review도 포함하도록 수정
+                    platform_filters = []
+                    for platform in platforms:
+                        if platform in ["gangnamunni", "babitalk"]:
+                            platform_filters.extend([platform, f"{platform}_review"])
+                        else:
+                            platform_filters.append(platform)
+                    review_query = review_query.filter(Review.platform_id.in_(platform_filters))
                 
                 if start_date:
                     review_query = review_query.filter(func.date(Review.created_at) >= start_date)
                 
                 if end_date:
-                    review_query = review_query.filter(func.date(Review.created_at) <= end_date)
+                    # end_date에 23:59:59까지 포함하도록 수정
+                    from datetime import datetime, time
+                    end_datetime = datetime.strptime(end_date, '%Y-%m-%d').replace(hour=23, minute=59, second=59)
+                    review_query = review_query.filter(Review.created_at <= end_datetime)
                 
                 counts['reviews'] = review_query.count()
             

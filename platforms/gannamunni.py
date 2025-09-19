@@ -1170,7 +1170,8 @@ async def test_get_reviews():
         if reviews:
             # print(reviews)
             # logger.info(f"📝 첫 번째 리뷰 정보:")
-            # first_review = reviews[0]
+            first_review = reviews[0]
+            print(first_review)
             pass
             
     except Exception as e:

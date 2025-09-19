@@ -445,7 +445,7 @@ class BabitalkDataCollector(LoggedClass):
             
             db_review = Review(
                 id=None,
-                platform_id="babitalk",
+                platform_id="babitalk_review",
                 platform_review_id=str(review.id),
                 community_id=community_id,
                 title=title,
