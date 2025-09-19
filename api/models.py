@@ -206,4 +206,17 @@ class SearchResponse(BaseModel):
     total_pages: int = Field(..., description="전체 페이지 수")
     has_next: bool = Field(..., description="다음 페이지 존재 여부")
     has_prev: bool = Field(..., description="이전 페이지 존재 여부")
-    search_info: Dict[str, Any] = Field(..., description="검색 조건 정보") 
+    search_info: Dict[str, Any] = Field(..., description="검색 조건 정보")
+
+# Bulk Get API 모델들
+class BulkGetRequest(BaseModel):
+    """Bulk Get 요청 모델"""
+    ids: List[int] = Field(..., description="조회할 ID 목록", min_items=1, max_items=100)
+
+class BulkGetResponse(BaseModel):
+    """Bulk Get 응답 모델"""
+    data: List[Any] = Field(..., description="조회된 데이터 목록")
+    total: int = Field(..., description="조회된 데이터 총 개수")
+    requested_ids: List[int] = Field(..., description="요청된 ID 목록")
+    found_ids: List[int] = Field(..., description="실제 조회된 ID 목록")
+    missing_ids: List[int] = Field(..., description="조회되지 않은 ID 목록") 

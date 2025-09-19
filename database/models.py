@@ -271,6 +271,19 @@ class DatabaseManager:
         """최근 후기들을 조회합니다."""
         return self._sqlalchemy_manager.get_recent_reviews(limit)
     
+    # Bulk Get 메서드들
+    def get_articles_by_ids(self, ids: List[int]) -> List[Dict]:
+        """ID 목록으로 게시글들을 조회합니다."""
+        return self._sqlalchemy_manager.get_articles_by_ids(ids)
+    
+    def get_reviews_by_ids(self, ids: List[int]) -> List[Dict]:
+        """ID 목록으로 후기들을 조회합니다."""
+        return self._sqlalchemy_manager.get_reviews_by_ids(ids)
+    
+    def get_comments_by_ids(self, ids: List[int]) -> List[Dict]:
+        """ID 목록으로 댓글들을 조회합니다."""
+        return self._sqlalchemy_manager.get_comments_by_ids(ids)
+    
     def get_comment_by_id(self, comment_id: int) -> Optional[Dict]:
         """ID로 댓글을 조회합니다."""
         return self._sqlalchemy_manager.get_comment_by_id(comment_id)

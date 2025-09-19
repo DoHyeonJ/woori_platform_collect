@@ -4,7 +4,7 @@ from datetime import datetime
 
 from api.models import (
     Article, Review, Comment, PaginatedResponse, PlatformType, 
-    SearchRequest, SearchResponse, DataType
+    SearchRequest, SearchResponse, DataType, BulkGetRequest, BulkGetResponse
 )
 from api.dependencies import get_database_manager
 from database.models import DatabaseManager
@@ -597,4 +597,168 @@ async def search_data_by_keywords(
         raise HTTPException(
             status_code=500,
             detail=f"키워드 검색 실패: {str(e)}"
+        )
+
+# Bulk Get API 엔드포인트들
+@router.post("/articles/bulk", response_model=BulkGetResponse)
+async def get_articles_bulk(
+    request: BulkGetRequest,
+    db: DatabaseManager = Depends(get_database_manager)
+):
+    """
+    ID 목록으로 게시글들을 조회합니다.
+    
+    - **ids**: 조회할 게시글 ID 목록 (1-100개)
+    """
+    try:
+        # 게시글 조회
+        articles_data = db.get_articles_by_ids(request.ids)
+        
+        # 응답 데이터 변환
+        articles = []
+        for article_data in articles_data:
+            articles.append(Article(
+                id=article_data['id'],
+                platform_id=article_data['platform_id'],
+                community_article_id=article_data['community_article_id'],
+                community_id=article_data['community_id'],
+                title=article_data['title'],
+                content=article_data['content'],
+                writer_nickname=article_data['writer_nickname'],
+                writer_id=article_data['writer_id'],
+                like_count=article_data['like_count'],
+                comment_count=article_data['comment_count'],
+                view_count=article_data['view_count'],
+                images=article_data['images'],
+                created_at=article_data['created_at'],
+                category_name=article_data['category_name'],
+                collected_at=article_data['collected_at']
+            ))
+        
+        # 조회된 ID와 누락된 ID 계산
+        found_ids = [article.id for article in articles]
+        missing_ids = [id for id in request.ids if id not in found_ids]
+        
+        return BulkGetResponse(
+            data=articles,
+            total=len(articles),
+            requested_ids=request.ids,
+            found_ids=found_ids,
+            missing_ids=missing_ids
+        )
+        
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"게시글 bulk 조회 실패: {str(e)}"
+        )
+
+@router.post("/reviews/bulk", response_model=BulkGetResponse)
+async def get_reviews_bulk(
+    request: BulkGetRequest,
+    db: DatabaseManager = Depends(get_database_manager)
+):
+    """
+    ID 목록으로 후기들을 조회합니다.
+    
+    - **ids**: 조회할 후기 ID 목록 (1-100개)
+    """
+    try:
+        # 후기 조회
+        reviews_data = db.get_reviews_by_ids(request.ids)
+        
+        # 응답 데이터 변환
+        reviews = []
+        for review_data in reviews_data:
+            reviews.append(Review(
+                id=review_data['id'],
+                platform_id=review_data['platform_id'],
+                platform_review_id=review_data['platform_review_id'],
+                community_id=review_data['community_id'],
+                title=review_data['title'],
+                content=review_data['content'],
+                writer_nickname=review_data['writer_nickname'],
+                writer_id=review_data['writer_id'],
+                like_count=review_data['like_count'],
+                rating=review_data['rating'],
+                price=review_data['price'],
+                images=review_data['images'],
+                categories=review_data['categories'],
+                sub_categories=review_data['sub_categories'],
+                surgery_date=review_data['surgery_date'],
+                hospital_name=review_data['hospital_name'],
+                doctor_name=review_data['doctor_name'],
+                is_blind=review_data['is_blind'],
+                is_image_blur=review_data['is_image_blur'],
+                is_certificated_review=review_data['is_certificated_review'],
+                created_at=review_data['created_at'],
+                collected_at=review_data['collected_at']
+            ))
+        
+        # 조회된 ID와 누락된 ID 계산
+        found_ids = [review.id for review in reviews]
+        missing_ids = [id for id in request.ids if id not in found_ids]
+        
+        return BulkGetResponse(
+            data=reviews,
+            total=len(reviews),
+            requested_ids=request.ids,
+            found_ids=found_ids,
+            missing_ids=missing_ids
+        )
+        
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"후기 bulk 조회 실패: {str(e)}"
+        )
+
+@router.post("/comments/bulk", response_model=BulkGetResponse)
+async def get_comments_bulk(
+    request: BulkGetRequest,
+    db: DatabaseManager = Depends(get_database_manager)
+):
+    """
+    ID 목록으로 댓글들을 조회합니다.
+    
+    - **ids**: 조회할 댓글 ID 목록 (1-100개)
+    """
+    try:
+        # 댓글 조회
+        comments_data = db.get_comments_by_ids(request.ids)
+        
+        # 응답 데이터 변환
+        comments = []
+        for comment_data in comments_data:
+            comments.append(Comment(
+                id=comment_data['id'],
+                platform_id=comment_data['platform_id'],
+                community_article_id=comment_data['community_article_id'],
+                community_id=comment_data.get('community_id', 0),  # 기본값 0 설정
+                comment_id=comment_data['community_comment_id'],  # community_comment_id를 comment_id로 매핑
+                parent_comment_id=comment_data.get('parent_comment_id'),
+                content=comment_data['content'],
+                writer_nickname=comment_data['writer_nickname'],
+                writer_id=comment_data['writer_id'],
+                like_count=0,  # Comment 모델에 like_count 필드가 없으므로 기본값 0 설정
+                created_at=comment_data['created_at'],
+                collected_at=comment_data['collected_at']
+            ))
+        
+        # 조회된 ID와 누락된 ID 계산
+        found_ids = [comment.id for comment in comments]
+        missing_ids = [id for id in request.ids if id not in found_ids]
+        
+        return BulkGetResponse(
+            data=comments,
+            total=len(comments),
+            requested_ids=request.ids,
+            found_ids=found_ids,
+            missing_ids=missing_ids
+        )
+        
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"댓글 bulk 조회 실패: {str(e)}"
         ) 

@@ -822,3 +822,40 @@ class SQLAlchemyDatabaseManager:
             raise
         finally:
             session.close()
+    
+    # Bulk Get 메서드들
+    def get_articles_by_ids(self, ids: List[int]) -> List[Dict]:
+        """ID 목록으로 게시글들을 조회합니다."""
+        session = self.get_session()
+        try:
+            articles = session.query(Article).filter(Article.id.in_(ids)).all()
+            return [self._article_to_dict(article) for article in articles]
+        except Exception as e:
+            logger.error(f"게시글 bulk 조회 중 오류 발생: {e}")
+            raise
+        finally:
+            session.close()
+    
+    def get_reviews_by_ids(self, ids: List[int]) -> List[Dict]:
+        """ID 목록으로 후기들을 조회합니다."""
+        session = self.get_session()
+        try:
+            reviews = session.query(Review).filter(Review.id.in_(ids)).all()
+            return [self._review_to_dict(review) for review in reviews]
+        except Exception as e:
+            logger.error(f"후기 bulk 조회 중 오류 발생: {e}")
+            raise
+        finally:
+            session.close()
+    
+    def get_comments_by_ids(self, ids: List[int]) -> List[Dict]:
+        """ID 목록으로 댓글들을 조회합니다."""
+        session = self.get_session()
+        try:
+            comments = session.query(Comment).filter(Comment.id.in_(ids)).all()
+            return [self._comment_to_dict(comment) for comment in comments]
+        except Exception as e:
+            logger.error(f"댓글 bulk 조회 중 오류 발생: {e}")
+            raise
+        finally:
+            session.close()
