@@ -171,7 +171,7 @@ async def collect_gannamunni_data(
     category_name = category_names.get(request.category, request.category)
     print(f"🚀 강남언니 {category_name} 데이터 수집 시작...")
     print(f"📅 수집 날짜: {request.target_date}")
-    print(f"💾 저장 방식: {'후기' if request.save_as_reviews else '게시글'}")
+    print(f"💾 저장 방식: 게시글(articles) + 리뷰(reviews) 분리 저장")
     
     try:
         collector = GangnamUnniDataCollector(token=request.token)
@@ -180,7 +180,6 @@ async def collect_gannamunni_data(
         collection_result = await collector.collect_articles_by_date(
             target_date=request.target_date,
             category=request.category,
-            save_as_reviews=request.save_as_reviews,
             include_reviews=True  # 리뷰 자동 수집
         )
         result = collection_result["articles"]

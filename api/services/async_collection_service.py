@@ -178,7 +178,6 @@ class AsyncCollectionService:
     async def collect_gangnamunni_data(
         target_date: str,
         categories: list = None,
-        save_as_reviews: bool = False,
         token: str = None,
         callback_url: str = None,
         progress_callback: Optional[Callable] = None
@@ -189,7 +188,6 @@ class AsyncCollectionService:
         Args:
             target_date: 수집할 날짜 (YYYY-MM-DD)
             categories: 수집할 카테고리 목록
-            save_as_reviews: 후기로 저장할지 여부
             token: 강남언니 API 토큰 (None이면 기본값 사용)
             callback_url: 수집 완료 시 호출할 콜백 URL
             progress_callback: 진행률 콜백 함수
@@ -217,7 +215,7 @@ class AsyncCollectionService:
         print(f"🚀 강남언니 비동기 수집 서비스 시작...")
         print(f"📅 수집 날짜: {target_date}")
         print(f"📂 수집 카테고리: {len(categories)}개")
-        print(f"💾 저장 방식: {'후기' if save_as_reviews else '게시글'}")
+        print(f"💾 저장 방식: 게시글(articles) + 리뷰(reviews) 분리 저장")
         
         results = {
             "target_date": target_date,
@@ -243,7 +241,7 @@ class AsyncCollectionService:
                 if progress_callback:
                     progress_callback(completed_categories, total_categories, f"{category_name} 카테고리 수집 중...")
                 
-                result = await collector.collect_articles_by_date(target_date, category, save_as_reviews, include_reviews=True)
+                result = await collector.collect_articles_by_date(target_date, category, include_reviews=True)
                 results["total_articles"] += result["articles"]
                 results["total_comments"] += result["comments"]
                 results["total_reviews"] += result.get("reviews", 0)

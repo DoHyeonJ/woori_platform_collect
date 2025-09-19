@@ -27,7 +27,6 @@ class GangnamunniCollectionRequest(BaseModel):
         ["hospital_question", "surgery_question", "free_chat", "review", "ask_doctor"],
         description="수집할 카테고리"
     )
-    save_as_reviews: Optional[bool] = Field(False, description="후기로 저장할지 여부")
     token: Optional[str] = Field(None, description="강남언니 API 토큰 (None이면 기본값 사용)")
     callback_url: Optional[str] = Field(None, description="수집 완료 시 호출할 콜백 URL")
 
@@ -108,7 +107,7 @@ async def start_gangnamunni_collection(request: GangnamunniCollectionRequest):
     print(f"🚀 강남언니 비동기 데이터 수집 시작...")
     print(f"📅 수집 날짜: {request.target_date}")
     print(f"📂 수집 카테고리: {', '.join(category_display_names)}")
-    print(f"💾 저장 방식: {'후기' if request.save_as_reviews else '게시글'}")
+    print(f"💾 저장 방식: 게시글(articles) + 리뷰(reviews) 분리 저장")
     print(f"🔑 토큰: {'사용자 지정' if request.token else '기본값'}")
     
     try:
@@ -118,7 +117,6 @@ async def start_gangnamunni_collection(request: GangnamunniCollectionRequest):
             {
                 "target_date": request.target_date,
                 "categories": request.categories,
-                "save_as_reviews": request.save_as_reviews,
                 "token": request.token
             }
         )
@@ -129,7 +127,6 @@ async def start_gangnamunni_collection(request: GangnamunniCollectionRequest):
             AsyncCollectionService.collect_gangnamunni_data,
             request.target_date,
             request.categories,
-            request.save_as_reviews,
             request.token,
             request.callback_url
         )

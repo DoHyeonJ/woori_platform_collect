@@ -12,14 +12,13 @@ class GangnamUnniDataCollector(LoggedClass):
         self.api = GangnamUnniAPI(token=token)
         self.db = DatabaseManager()  # db_path 파라미터 제거
     
-    async def collect_articles_by_date(self, target_date: str, category: str = "hospital_question", save_as_reviews: bool = False, include_reviews: bool = True) -> Dict[str, int]:
+    async def collect_articles_by_date(self, target_date: str, category: str = "hospital_question", include_reviews: bool = True) -> Dict[str, int]:
         """
-        특정 날짜의 강남언니 게시글을 수집하고 데이터베이스에 저장합니다.
+        특정 날짜의 강남언니 게시글과 리뷰를 수집하고 데이터베이스에 저장합니다.
         
         Args:
             target_date: 수집할 날짜 (YYYY-MM-DD 형식)
             category: 카테고리 (기본값: "hospital_question")
-            save_as_reviews: True이면 reviews 테이블에 저장, False이면 articles 테이블에 저장
             include_reviews: True이면 실제 리뷰 API에서도 리뷰를 수집 (기본값: True)
         
         Returns:
@@ -49,81 +48,86 @@ class GangnamUnniDataCollector(LoggedClass):
                 self.log_info(f"📭 {target_date} 날짜에 수집할 게시글과 리뷰가 없습니다. (소요시간: {elapsed_time:.2f}초)")
                 return {"articles": 0, "comments": 0, "reviews": 0}
             
-            # 각 게시글 처리 및 저장
+            # 1. 리뷰 먼저 저장 (실제 리뷰 데이터만)
             total_articles = 0
             total_comments = 0
             total_reviews = 0
             
-            for i, article in enumerate(articles):
-                try:
-                    # 중복 체크: 이미 저장된 게시글인지 확인
-                    existing_article = self.db.get_article_by_platform_id_and_community_article_id("gangnamunni", str(article.id))
-                    if existing_article:
-                        self.log_info(f"⏭️  게시글 {article.id}는 이미 저장되어 있습니다. 건너뜀")
-                        continue
+            if reviews:
+                self.log_info(f"📝 {len(reviews)}개 리뷰 저장 시작...")
+                batch_size = 3  # 한 번에 처리할 리뷰 수 (상세 API 호출로 인해 작게 설정)
+                for i in range(0, len(reviews), batch_size):
+                    batch_reviews = reviews[i:i + batch_size]
+                    self.log_info(f"📦 리뷰 배치 처리 중... ({i+1}-{min(i+batch_size, len(reviews))}/{len(reviews)})")
                     
-                    # 게시글 정보 저장
-                    if save_as_reviews:
-                        article_id = await self._save_as_review(article, gangnamunni_community['id'])
-                    else:
-                        article_id = await self._save_article(article, gangnamunni_community['id'])
+                    # 배치 내에서 순차 처리 (API 부하 방지)
+                    for review in batch_reviews:
+                        try:
+                            # 중복 체크: 이미 저장된 리뷰인지 확인
+                            existing_review = self.db.get_review_by_platform_id_and_platform_review_id("gangnamunni_review", str(review.id))
+                            if existing_review:
+                                self.log_info(f"⏭️  리뷰 {review.id}는 이미 저장되어 있습니다. 건너뜀")
+                                continue
+                            
+                            # 리뷰 정보 저장
+                            review_id = await self._save_review(review, gangnamunni_community['id'])
+                            if review_id:
+                                total_reviews += 1
+                            
+                        except Exception as e:
+                            self.log_error(f"❌ 리뷰 처리 실패 (ID: {review.id}): {e}")
+                            continue
                     
-                    if article_id:
-                        total_articles += 1
-                        
-                        # 댓글이 있는 경우 댓글도 수집
-                        if article.comment_count > 0:
-                            try:
-                                comments = await self.api.get_comments(article.id)
-                                if comments:
-                                    saved_comments = await self._save_comments(comments, article_id)
-                                    total_comments += saved_comments
-                            except Exception as e:
-                                # 404 에러 발생 시 failover 처리
-                                if "404" in str(e) or "Not Found" in str(e):
-                                    self.log_error(f"❌ 404 에러 발생: 게시글 ID {article.id} 댓글 수집 실패")
-                                    await self._handle_404_failover(target_date, category, save_as_reviews, gangnamunni_community, articles, i)
-                                    return {"articles": total_articles, "comments": total_comments}
-                                else:
-                                    self.log_error(f"❌ 댓글 수집 실패 (게시글 ID: {article.id}): {e}")
-                    
-                except Exception as e:
-                    # 404 에러 발생 시 failover 처리
-                    if "404" in str(e) or "Not Found" in str(e):
-                        self.log_error(f"❌ 404 에러 발생: 게시글 ID {article.id} 처리 실패")
-                        await self._handle_404_failover(target_date, category, save_as_reviews, gangnamunni_community, articles, i)
-                        return {"articles": total_articles, "comments": total_comments}
-                    else:
-                        self.log_error(f"❌ 게시글 처리 실패 (ID: {article.id}): {e}")
-                        continue
-            
-            # 리뷰 저장 (배치 처리)
-            batch_size = 3  # 한 번에 처리할 리뷰 수 (상세 API 호출로 인해 작게 설정)
-            for i in range(0, len(reviews), batch_size):
-                batch_reviews = reviews[i:i + batch_size]
-                self.log_info(f"📦 리뷰 배치 처리 중... ({i+1}-{min(i+batch_size, len(reviews))}/{len(reviews)})")
+                    # 배치 간 딜레이 (API 부하 방지)
+                    if i + batch_size < len(reviews):
+                        await asyncio.sleep(3)
                 
-                # 배치 내에서 순차 처리 (API 부하 방지)
-                for review in batch_reviews:
+                self.log_info(f"✅ 리뷰 저장 완료: {total_reviews}개")
+            
+            # 2. 게시글 저장 (리뷰가 아닌 일반 게시글)
+            if articles:
+                self.log_info(f"📄 {len(articles)}개 게시글 저장 시작...")
+                for i, article in enumerate(articles):
                     try:
-                        # 중복 체크: 이미 저장된 리뷰인지 확인
-                        existing_review = self.db.get_review_by_platform_id_and_platform_review_id("gangnamunni_review", str(review.id))
-                        if existing_review:
-                            self.log_info(f"⏭️  리뷰 {review.id}는 이미 저장되어 있습니다. 건너뜀")
+                        # 중복 체크: 이미 저장된 게시글인지 확인
+                        existing_article = self.db.get_article_by_platform_id_and_community_article_id("gangnamunni", str(article.id))
+                        if existing_article:
+                            self.log_info(f"⏭️  게시글 {article.id}는 이미 저장되어 있습니다. 건너뜀")
                             continue
                         
-                        # 리뷰 정보 저장
-                        review_id = await self._save_review(review, gangnamunni_community['id'])
-                        if review_id:
-                            total_reviews += 1
+                        # 게시글 정보 저장 (리뷰가 아닌 일반 게시글)
+                        article_id = await self._save_article(article, gangnamunni_community['id'])
+                        
+                        if article_id:
+                            total_articles += 1
+                            
+                            # 댓글이 있는 경우 댓글도 수집
+                            if article.comment_count > 0:
+                                try:
+                                    comments = await self.api.get_comments(article.id)
+                                    if comments:
+                                        saved_comments = await self._save_comments(comments, article_id)
+                                        total_comments += saved_comments
+                                except Exception as e:
+                                    # 404 에러 발생 시 failover 처리
+                                    if "404" in str(e) or "Not Found" in str(e):
+                                        self.log_error(f"❌ 404 에러 발생: 게시글 ID {article.id} 댓글 수집 실패")
+                                        await self._handle_404_failover(target_date, category, gangnamunni_community, articles, i)
+                                        return {"articles": total_articles, "comments": total_comments, "reviews": total_reviews}
+                                    else:
+                                        self.log_error(f"❌ 댓글 수집 실패 (게시글 ID: {article.id}): {e}")
                         
                     except Exception as e:
-                        self.log_error(f"❌ 리뷰 처리 실패 (ID: {review.id}): {e}")
-                        continue
+                        # 404 에러 발생 시 failover 처리
+                        if "404" in str(e) or "Not Found" in str(e):
+                            self.log_error(f"❌ 404 에러 발생: 게시글 ID {article.id} 처리 실패")
+                            await self._handle_404_failover(target_date, category, gangnamunni_community, articles, i)
+                            return {"articles": total_articles, "comments": total_comments, "reviews": total_reviews}
+                        else:
+                            self.log_error(f"❌ 게시글 처리 실패 (ID: {article.id}): {e}")
+                            continue
                 
-                # 배치 간 딜레이 (API 부하 방지)
-                if i + batch_size < len(reviews):
-                    await asyncio.sleep(3)
+                self.log_info(f"✅ 게시글 저장 완료: {total_articles}개")
             
             end_time = time.time()
             elapsed_time = end_time - start_time
@@ -142,13 +146,13 @@ class GangnamUnniDataCollector(LoggedClass):
             # 404 에러 발생 시 failover 처리
             if "404" in str(e) or "Not Found" in str(e):
                 self.log_error(f"❌ 404 에러 발생: {target_date} 날짜 게시글 목록 조회 실패 (소요시간: {elapsed_time:.2f}초)")
-                await self._handle_404_failover(target_date, category, save_as_reviews, gangnamunni_community, [], 0)
+                await self._handle_404_failover(target_date, category, gangnamunni_community, [], 0)
                 return {"articles": 0, "comments": 0}
             else:
                 self.log_error(f"❌ 날짜별 게시글 수집 중 오류 발생: {e} (소요시간: {elapsed_time:.2f}초)")
                 return {"articles": 0, "comments": 0}
     
-    async def _handle_404_failover(self, target_date: str, category: str, save_as_reviews: bool, 
+    async def _handle_404_failover(self, target_date: str, category: str, 
                                  gangnamunni_community: Dict, articles: List[Article], failed_index: int):
         """
         404 에러 발생 시 failover 처리를 수행합니다.
@@ -156,7 +160,6 @@ class GangnamUnniDataCollector(LoggedClass):
         Args:
             target_date: 수집할 날짜
             category: 카테고리
-            save_as_reviews: reviews 테이블에 저장할지 여부
             gangnamunni_community: 강남언니 커뮤니티 정보
             articles: 수집된 게시글 목록
             failed_index: 실패한 게시글의 인덱스
@@ -182,11 +185,8 @@ class GangnamUnniDataCollector(LoggedClass):
             try:
                 self.log_info(f"🔄 재시작 수집 진행 중: {i + 1}/{total_articles} (게시글 ID: {article.id})")
                 
-                # 게시글 정보 저장
-                if save_as_reviews:
-                    article_id = await self._save_as_review(article, gangnamunni_community['id'])
-                else:
-                    article_id = await self._save_article(article, gangnamunni_community['id'])
+                # 게시글 정보 저장 (일반 게시글로 저장)
+                article_id = await self._save_article(article, gangnamunni_community['id'])
                 
                 if article_id:
                     # 댓글이 있는 경우 댓글도 수집
@@ -200,7 +200,7 @@ class GangnamUnniDataCollector(LoggedClass):
                             if "404" in str(e) or "Not Found" in str(e):
                                 self.log_error(f"❌ 재시작 중에도 404 에러 발생: 게시글 ID {article.id} 댓글 수집 실패")
                                 # 재시작 중에도 404 에러가 발생하면 다시 failover 처리
-                                await self._handle_404_failover(target_date, category, save_as_reviews, gangnamunni_community, remaining_articles, i)
+                                await self._handle_404_failover(target_date, category, gangnamunni_community, remaining_articles, i)
                                 return
                             else:
                                 self.log_error(f"❌ 재시작 중 댓글 수집 실패 (게시글 ID: {article.id}): {e}")
@@ -209,7 +209,7 @@ class GangnamUnniDataCollector(LoggedClass):
                 if "404" in str(e) or "Not Found" in str(e):
                     self.log_error(f"❌ 재시작 중에도 404 에러 발생: 게시글 ID {article.id} 처리 실패")
                     # 재시작 중에도 404 에러가 발생하면 다시 failover 처리
-                    await self._handle_404_failover(target_date, category, save_as_reviews, gangnamunni_community, remaining_articles, i)
+                    await self._handle_404_failover(target_date, category, gangnamunni_community, remaining_articles, i)
                     return
                 else:
                     self.log_error(f"❌ 재시작 중 게시글 처리 실패 (ID: {article.id}): {e}")
@@ -222,13 +222,12 @@ class GangnamUnniDataCollector(LoggedClass):
         self.log_info(f"📊 재시작 수집 결과: 게시글 {total_articles}개, 댓글 {total_comments}개")
         self.log_info(f"⏱️  재시작 소요시간: {failover_elapsed_time:.2f}초")
 
-    async def collect_all_categories_by_date(self, target_date: str, save_as_reviews: bool = False, include_reviews: bool = True) -> Dict[str, int]:
+    async def collect_all_categories_by_date(self, target_date: str, include_reviews: bool = True) -> Dict[str, int]:
         """
-        특정 날짜의 모든 카테고리 게시글을 수집하고 데이터베이스에 저장합니다.
+        특정 날짜의 모든 카테고리 게시글과 리뷰를 수집하고 데이터베이스에 저장합니다.
         
         Args:
             target_date: 수집할 날짜 (YYYY-MM-DD 형식)
-            save_as_reviews: True이면 reviews 테이블에 저장, False이면 articles 테이블에 저장
             include_reviews: True이면 실제 리뷰 API에서도 리뷰를 수집 (기본값: True)
         
         Returns:
@@ -255,7 +254,7 @@ class GangnamUnniDataCollector(LoggedClass):
         for category_key, category_name in categories.items():
             try:
                 self.log_info(f"🔄 {category_name} 카테고리 수집 중...")
-                result = await self.collect_articles_by_date(target_date, category_key, save_as_reviews, include_reviews)
+                result = await self.collect_articles_by_date(target_date, category_key, include_reviews)
                 results[category_key] = result["articles"]
                 total_articles += result["articles"]
                 total_comments += result["comments"]
@@ -277,7 +276,7 @@ class GangnamUnniDataCollector(LoggedClass):
                     self.log_info(f"🔄 {category_name} 카테고리 수집 재개를 시작합니다.")
                     
                     try:
-                        result = await self.collect_articles_by_date(target_date, category_key, save_as_reviews, include_reviews)
+                        result = await self.collect_articles_by_date(target_date, category_key, include_reviews)
                         results[category_key] = result["articles"]
                         total_articles += result["articles"]
                         total_comments += result["comments"]
@@ -589,18 +588,18 @@ async def test_gannamunni_collector():
         print(f"📅 오늘 날짜({today}) 게시글 수집 테스트")
         
         # 병원질문 카테고리 게시글 수집 테스트
-        articles_count = await collector.collect_articles_by_date(today, "hospital_question", save_as_reviews=False)
+        articles_count = await collector.collect_articles_by_date(today, "hospital_question", include_reviews=False)
         
         print(f"\n📊 게시글 테스트 결과:")
-        print(f"   저장된 게시글: {articles_count}개")
+        print(f"   저장된 게시글: {articles_count['articles']}개")
         
-        # 후기로 저장하는 테스트
-        print(f"\n📅 오늘 날짜({today}) 후기 저장 테스트")
+        # 리뷰 수집 테스트
+        print(f"\n📅 오늘 날짜({today}) 리뷰 수집 테스트")
         
-        reviews_count = await collector.collect_articles_by_date(today, "review", save_as_reviews=True)
+        reviews_count = await collector.collect_articles_by_date(today, "review", include_reviews=True)
         
-        print(f"\n📊 후기 테스트 결과:")
-        print(f"   저장된 후기: {reviews_count}개")
+        print(f"\n📊 리뷰 테스트 결과:")
+        print(f"   저장된 리뷰: {reviews_count['reviews']}개")
         
         # 통계 조회
         stats = collector.get_statistics()

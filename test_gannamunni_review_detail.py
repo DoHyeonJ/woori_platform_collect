@@ -63,7 +63,6 @@ async def test_review_collection():
         result = await collector.collect_articles_by_date(
             target_date=test_date,
             category="hospital_question",
-            save_as_reviews=False,
             include_reviews=True
         )
         
