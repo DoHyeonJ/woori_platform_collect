@@ -2,7 +2,7 @@ import asyncio
 import json
 from datetime import datetime
 from typing import List, Dict, Optional
-from platforms.gannamunni import GangnamUnniAPI, Article, Comment
+from platforms.gannamunni import GangnamUnniAPI, Article, Comment, Review
 from database.models import DatabaseManager, Community, Article as DBArticle, Comment as DBComment
 from utils.logger import LoggedClass
 
@@ -12,7 +12,7 @@ class GangnamUnniDataCollector(LoggedClass):
         self.api = GangnamUnniAPI(token=token)
         self.db = DatabaseManager()  # db_path 파라미터 제거
     
-    async def collect_articles_by_date(self, target_date: str, category: str = "hospital_question", save_as_reviews: bool = False) -> Dict[str, int]:
+    async def collect_articles_by_date(self, target_date: str, category: str = "hospital_question", save_as_reviews: bool = False, include_reviews: bool = True) -> Dict[str, int]:
         """
         특정 날짜의 강남언니 게시글을 수집하고 데이터베이스에 저장합니다.
         
@@ -20,9 +20,10 @@ class GangnamUnniDataCollector(LoggedClass):
             target_date: 수집할 날짜 (YYYY-MM-DD 형식)
             category: 카테고리 (기본값: "hospital_question")
             save_as_reviews: True이면 reviews 테이블에 저장, False이면 articles 테이블에 저장
+            include_reviews: True이면 실제 리뷰 API에서도 리뷰를 수집 (기본값: True)
         
         Returns:
-            Dict[str, int]: {"articles": 수집된 게시글 수, "comments": 수집된 댓글 수}
+            Dict[str, int]: {"articles": 수집된 게시글 수, "comments": 수집된 댓글 수, "reviews": 수집된 리뷰 수}
         """
         import time
         start_time = time.time()
@@ -35,15 +36,23 @@ class GangnamUnniDataCollector(LoggedClass):
             # API에서 해당 날짜의 게시글 데이터 가져오기
             articles = await self.api.get_articles_by_date(target_date, category=category)
             
-            if not articles:
+            # 실제 리뷰 API에서 리뷰 수집 (include_reviews가 True인 경우)
+            reviews = []
+            if include_reviews:
+                self.log_info(f"📝 {target_date} 날짜 강남언니 리뷰 수집 시작...")
+                reviews = await self.api.get_reviews_by_date(target_date)
+                self.log_info(f"📊 리뷰 수집 완료: {len(reviews)}개")
+            
+            if not articles and not reviews:
                 end_time = time.time()
                 elapsed_time = end_time - start_time
-                self.log_info(f"📭 {target_date} 날짜에 수집할 게시글이 없습니다. (소요시간: {elapsed_time:.2f}초)")
-                return {"articles": 0, "comments": 0}
+                self.log_info(f"📭 {target_date} 날짜에 수집할 게시글과 리뷰가 없습니다. (소요시간: {elapsed_time:.2f}초)")
+                return {"articles": 0, "comments": 0, "reviews": 0}
             
             # 각 게시글 처리 및 저장
             total_articles = 0
             total_comments = 0
+            total_reviews = 0
             
             for i, article in enumerate(articles):
                 try:
@@ -88,15 +97,33 @@ class GangnamUnniDataCollector(LoggedClass):
                         self.log_error(f"❌ 게시글 처리 실패 (ID: {article.id}): {e}")
                         continue
             
+            # 각 리뷰 처리 및 저장
+            for i, review in enumerate(reviews):
+                try:
+                    # 중복 체크: 이미 저장된 리뷰인지 확인
+                    existing_review = self.db.get_review_by_platform_id_and_platform_review_id("gangnamunni_review", str(review.id))
+                    if existing_review:
+                        self.log_info(f"⏭️  리뷰 {review.id}는 이미 저장되어 있습니다. 건너뜀")
+                        continue
+                    
+                    # 리뷰 정보 저장
+                    review_id = await self._save_review(review, gangnamunni_community['id'])
+                    if review_id:
+                        total_reviews += 1
+                    
+                except Exception as e:
+                    self.log_error(f"❌ 리뷰 처리 실패 (ID: {review.id}): {e}")
+                    continue
+            
             end_time = time.time()
             elapsed_time = end_time - start_time
             
             # 수집 완료 로그
-            self.log_info(f"✅ {target_date} 날짜 게시글 수집 완료!")
-            self.log_info(f"📊 수집 결과: 게시글 {total_articles}개, 댓글 {total_comments}개")
+            self.log_info(f"✅ {target_date} 날짜 게시글 및 리뷰 수집 완료!")
+            self.log_info(f"📊 수집 결과: 게시글 {total_articles}개, 댓글 {total_comments}개, 리뷰 {total_reviews}개")
             self.log_info(f"⏱️  소요시간: {elapsed_time:.2f}초")
             
-            return {"articles": total_articles, "comments": total_comments}
+            return {"articles": total_articles, "comments": total_comments, "reviews": total_reviews}
             
         except Exception as e:
             end_time = time.time()
@@ -185,13 +212,14 @@ class GangnamUnniDataCollector(LoggedClass):
         self.log_info(f"📊 재시작 수집 결과: 게시글 {total_articles}개, 댓글 {total_comments}개")
         self.log_info(f"⏱️  재시작 소요시간: {failover_elapsed_time:.2f}초")
 
-    async def collect_all_categories_by_date(self, target_date: str, save_as_reviews: bool = False) -> Dict[str, int]:
+    async def collect_all_categories_by_date(self, target_date: str, save_as_reviews: bool = False, include_reviews: bool = True) -> Dict[str, int]:
         """
         특정 날짜의 모든 카테고리 게시글을 수집하고 데이터베이스에 저장합니다.
         
         Args:
             target_date: 수집할 날짜 (YYYY-MM-DD 형식)
             save_as_reviews: True이면 reviews 테이블에 저장, False이면 articles 테이블에 저장
+            include_reviews: True이면 실제 리뷰 API에서도 리뷰를 수집 (기본값: True)
         
         Returns:
             Dict[str, int]: 카테고리별 수집된 게시글 수
@@ -211,15 +239,17 @@ class GangnamUnniDataCollector(LoggedClass):
         results = {}
         total_articles = 0
         total_comments = 0
+        total_reviews = 0
         
         # 모든 카테고리 순회
         for category_key, category_name in categories.items():
             try:
                 self.log_info(f"🔄 {category_name} 카테고리 수집 중...")
-                result = await self.collect_articles_by_date(target_date, category_key, save_as_reviews)
+                result = await self.collect_articles_by_date(target_date, category_key, save_as_reviews, include_reviews)
                 results[category_key] = result["articles"]
                 total_articles += result["articles"]
                 total_comments += result["comments"]
+                total_reviews += result.get("reviews", 0)
                 
                 # 카테고리 간 딜레이 (서버 부하 방지)
                 await asyncio.sleep(2)
@@ -237,10 +267,11 @@ class GangnamUnniDataCollector(LoggedClass):
                     self.log_info(f"🔄 {category_name} 카테고리 수집 재개를 시작합니다.")
                     
                     try:
-                        result = await self.collect_articles_by_date(target_date, category_key, save_as_reviews)
+                        result = await self.collect_articles_by_date(target_date, category_key, save_as_reviews, include_reviews)
                         results[category_key] = result["articles"]
                         total_articles += result["articles"]
                         total_comments += result["comments"]
+                        total_reviews += result.get("reviews", 0)
                     except Exception as retry_e:
                         self.log_error(f"❌ 재시작 후에도 {category_name} 카테고리 수집 실패: {retry_e}")
                         results[category_key] = 0
@@ -252,8 +283,8 @@ class GangnamUnniDataCollector(LoggedClass):
         elapsed_time = end_time - start_time
         
         # 전체 결과 요약
-        self.log_info(f"✅ 모든 카테고리 게시글 수집 완료!")
-        self.log_info(f"📊 전체 수집 결과: 게시글 {total_articles}개, 댓글 {total_comments}개")
+        self.log_info(f"✅ 모든 카테고리 게시글 및 리뷰 수집 완료!")
+        self.log_info(f"📊 전체 수집 결과: 게시글 {total_articles}개, 댓글 {total_comments}개, 리뷰 {total_reviews}개")
         self.log_info(f"⏱️  총 소요시간: {elapsed_time:.2f}초")
         
         # 카테고리별 상세 결과
@@ -418,6 +449,88 @@ class GangnamUnniDataCollector(LoggedClass):
                 continue
         
         return saved_count
+    
+    async def _save_review(self, review: Review, community_id: int) -> Optional[int]:
+        """리뷰 정보를 데이터베이스에 저장"""
+        try:
+            from database.models import Review as DBReview
+            
+            # 날짜 파싱
+            try:
+                created_at = datetime.fromisoformat(review.postedAtUtc.replace('Z', '+00:00'))
+            except ValueError:
+                created_at = datetime.now()
+            
+            # 시술 정보를 JSON으로 변환
+            treatments_json = json.dumps([{
+                'id': treatment.id,
+                'name': treatment.name
+            } for treatment in review.treatments], ensure_ascii=False)
+            
+            # 병원 정보를 JSON으로 변환
+            hospital_json = json.dumps({
+                'id': review.hospital.id,
+                'name': review.hospital.name,
+                'districtName': review.hospital.districtName,
+                'country': review.hospital.country
+            }, ensure_ascii=False)
+            
+            # 이미지 정보를 JSON으로 변환
+            images_json = json.dumps({
+                'beforePhotos': review.beforePhotos,
+                'afterPhotos': review.afterPhotos,
+                'progressReviewPhotos': [{
+                    'url': photo.url,
+                    'progressDate': photo.progressDate
+                } for photo in review.progressReviewPhotos]
+            }, ensure_ascii=False)
+            
+            # 시술 정보를 JSON으로 변환
+            amplitude_info = review.amplitudeTreatmentInfo
+            categories_json = json.dumps(amplitude_info.treatmentCategoryTagLabelList, ensure_ascii=False)
+            sub_categories_json = json.dumps(amplitude_info.treatmentGroupTagLabelList, ensure_ascii=False)
+            
+            # 비용 정보
+            price = 0
+            if review.totalCost:
+                price = review.totalCost.amount
+            
+            # 리뷰 제목 생성
+            treatment_names = [t.name for t in review.treatments]
+            title = f"{', '.join(treatment_names)} - {review.hospital.name}"
+            
+            # 리뷰를 Review로 저장
+            db_review = DBReview(
+                id=None,
+                platform_id="gangnamunni_review",
+                platform_review_id=str(review.id),
+                community_id=community_id,
+                title=title,
+                content=review.description,
+                images=images_json,
+                writer_nickname=review.author.nickName,
+                writer_id=str(review.author.id),
+                like_count=0,  # 강남언니 리뷰에는 좋아요 수가 없음
+                rating=review.totalRating,
+                price=price,
+                categories=categories_json,
+                sub_categories=sub_categories_json,
+                surgery_date=review.treatmentReceivedAtUtc,
+                hospital_name=review.hospital.name,
+                doctor_name="",  # 강남언니 리뷰에는 담당의명이 없음
+                is_blind=False,
+                is_image_blur=False,
+                is_certificated_review=review.procedureProofApproved,
+                created_at=created_at,
+                collected_at=datetime.now()  # 수집 시간 기록
+            )
+            
+            review_id = self.db.insert_review(db_review)
+            return review_id
+            
+        except Exception as e:
+            print(f"    ⚠️  리뷰 저장 실패: {e}")
+            return None
     
     def get_statistics(self) -> Dict:
         """강남언니 데이터 통계 조회"""

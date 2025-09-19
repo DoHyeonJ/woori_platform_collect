@@ -176,19 +176,21 @@ async def collect_gannamunni_data(
     try:
         collector = GangnamUnniDataCollector(token=request.token)
         
-        # 강남언니 데이터 수집
+        # 강남언니 데이터 수집 (리뷰 자동 포함)
         collection_result = await collector.collect_articles_by_date(
             target_date=request.target_date,
             category=request.category,
-            save_as_reviews=request.save_as_reviews
+            save_as_reviews=request.save_as_reviews,
+            include_reviews=True  # 리뷰 자동 수집
         )
         result = collection_result["articles"]
+        reviews_result = collection_result.get("reviews", 0)
         
         execution_time = time.time() - start_time
         
         # 수집 완료 로그
         print(f"✅ 강남언니 {category_name} 데이터 수집 완료!")
-        print(f"📊 수집 결과: 게시글 {result}개, 댓글 {collection_result['comments']}개")
+        print(f"📊 수집 결과: 게시글 {result}개, 댓글 {collection_result['comments']}개, 리뷰 {reviews_result}개")
         print(f"⏱️  총 소요시간: {execution_time:.2f}초")
         
         collection_result = CollectionResult(
@@ -196,11 +198,11 @@ async def collect_gannamunni_data(
             category=request.category,
             target_date=request.target_date,
             total_articles=result,
-            total_comments=0,
-            total_reviews=result if request.save_as_reviews else 0,
+            total_comments=collection_result["comments"],
+            total_reviews=reviews_result,
             execution_time=execution_time,
             status="success",
-            message=f"강남언니 {category_name} 데이터 수집 완료",
+            message=f"강남언니 {category_name} 데이터 수집 완료 (리뷰 {reviews_result}개 포함)",
             timestamp=datetime.now()
         )
         
@@ -214,7 +216,7 @@ async def collect_gannamunni_data(
                 result={
                     "total_articles": result,
                     "total_comments": collection_result["comments"],
-                    "total_reviews": result if request.save_as_reviews else 0,
+                    "total_reviews": reviews_result,
                     "execution_time": execution_time
                 },
                 is_success=True

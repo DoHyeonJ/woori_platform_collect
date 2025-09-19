@@ -46,6 +46,78 @@ class Comment:
     replies: List['Comment']
 
 @dataclass
+class ReviewAuthor:
+    id: int
+    level: int
+    nickName: str
+    profileImage: str
+
+@dataclass
+class ReviewTreatment:
+    id: int
+    name: str
+
+@dataclass
+class ReviewHospital:
+    id: int
+    name: str
+    districtName: str
+    country: str
+
+@dataclass
+class ReviewServiceOffer:
+    id: int
+    operationType: str
+
+@dataclass
+class ReviewCost:
+    currency: str
+    amount: int
+
+@dataclass
+class ReviewProgressPhoto:
+    url: str
+    progressDate: str
+
+@dataclass
+class ReviewAmplitudeTreatmentInfo:
+    treatmentIdList: List[int]
+    treatmentLabelList: List[str]
+    treatmentCategoryTagIdList: List[int]
+    treatmentCategoryTagLabelList: List[str]
+    treatmentGroupTagIdList: List[int]
+    treatmentGroupTagLabelList: List[str]
+    concernTagIdList: List[int]
+    concernTagLabelList: List[str]
+    concernBodyPartTagIdList: List[int]
+    concernBodyPartTagLabelList: List[str]
+
+@dataclass
+class Review:
+    id: int
+    author: ReviewAuthor
+    treatments: List[ReviewTreatment]
+    hospital: ReviewHospital
+    serviceOffer: Optional[ReviewServiceOffer]
+    totalRating: int
+    totalCost: Optional[ReviewCost]
+    description: str
+    descriptionLanguage: str
+    beforePhotos: List[str]
+    afterPhotos: List[str]
+    postedAtUtc: str
+    editedLastAtUtc: str
+    procedureProofApproved: bool
+    amplitudeTreatmentInfo: ReviewAmplitudeTreatmentInfo
+    highlights: List[str]
+    progressReviewPhotos: List[ReviewProgressPhoto]
+    treatmentReceivedAtUtc: str
+    lastProgressDate: Optional[str]
+    translation: Optional[str]
+    costChangedReasons: Optional[Dict]
+    isProgressOnGoing: Optional[bool]
+
+@dataclass
 class Article:
     id: int
     category_id: int
@@ -694,6 +766,295 @@ class GangnamUnniAPI(LoggedClass):
         except Exception as e:
             self.log_error(f"게시글 검색 실패: {e}")
             return []
+
+    async def get_reviews(self, page_index: int = 0, page_size: int = 20, sort: str = "RECENT_POSTED_AT") -> List[Review]:
+        """
+        강남언니 리뷰 목록을 가져옵니다.
+        
+        Args:
+            page_index: 페이지 인덱스 (기본값: 0)
+            page_size: 페이지당 리뷰 수 (기본값: 20)
+            sort: 정렬 방식 (기본값: "RECENT_POSTED_AT")
+        
+        Returns:
+            List[Review]: 리뷰 목록
+        """
+        try:
+            # 리뷰 API 엔드포인트
+            url = "https://env.gnsister.com/display/search-view/reviews"
+            
+            # 요청 헤더
+            headers = {
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36",
+                "Accept": "application/json, text/plain, */*",
+                "Accept-Language": "ko-KR,ko;q=0.9,en;q=0.8",
+                "Accept-Encoding": "gzip, deflate, br, zstd",
+                "Content-Type": "application/json",
+                "Origin": "https://env.gnsister.com",
+                "Referer": "https://env.gnsister.com/",
+                "Connection": "keep-alive",
+                "Sec-Fetch-Dest": "empty",
+                "Sec-Fetch-Mode": "cors",
+                "Sec-Fetch-Site": "same-origin",
+                "Cache-Control": "no-cache",
+                "Pragma": "no-cache",
+            }
+            
+            # 요청 바디
+            payload = {
+                "filters": {
+                    "gender": "",
+                    "hasPhotos": False,
+                    "procedureProofApproved": False
+                },
+                "keyword": "",
+                "pagination": {
+                    "pageIndex": page_index,
+                    "pageSize": page_size,
+                    "sort": sort
+                }
+            }
+            
+            async with aiohttp.ClientSession() as session:
+                async with session.post(url, json=payload, headers=headers) as response:
+                    if response.status != 200:
+                        raise Exception(f"HTTP {response.status}: {response.reason}")
+                    
+                    json_data = await response.json()
+                    
+                    # contents 배열에서 리뷰 목록 추출
+                    reviews_data = json_data.get("contents", [])
+                    
+                    reviews = []
+                    for item in reviews_data:
+                        review = self._parse_review_from_api(item)
+                        reviews.append(review)
+                    
+                    return reviews
+                    
+        except Exception as e:
+            self.log_error(f"리뷰 목록 가져오기 실패: {e}")
+            return []
+
+    async def get_reviews_by_date(self, target_date: str, max_pages: int = 50) -> List[Review]:
+        """
+        특정 날짜의 리뷰를 수집합니다.
+        
+        Args:
+            target_date: 수집할 날짜 (YYYY-MM-DD 형식, 예: "2024-01-15")
+            max_pages: 최대 수집할 페이지 수 (기본값: 50)
+        
+        Returns:
+            List[Review]: 해당 날짜의 리뷰 목록
+        """
+        try:
+            # 날짜 형식 검증
+            target_date_obj = datetime.strptime(target_date, "%Y-%m-%d").date()
+        except ValueError:
+            self.log_error(f"잘못된 날짜 형식입니다. YYYY-MM-DD 형식으로 입력해주세요. (예: 2024-01-15)")
+            return []
+        
+        all_reviews = []
+        page_index = 0
+        consecutive_empty_pages = 0
+        max_consecutive_empty = 3
+        found_target_date = False
+        consecutive_404_errors = 0
+        max_404_errors = 5
+        
+        while page_index < max_pages and consecutive_empty_pages < max_consecutive_empty:
+            try:
+                # 현재 페이지의 리뷰 가져오기
+                page_reviews = await self.get_reviews(page_index=page_index, page_size=20)
+                
+                if not page_reviews:
+                    consecutive_empty_pages += 1
+                    page_index += 1
+                    await asyncio.sleep(1)
+                    continue
+                
+                # 날짜별 필터링
+                target_date_reviews = []
+                older_reviews_found = False
+                
+                for review in page_reviews:
+                    try:
+                        # postedAtUtc를 날짜로 변환
+                        review_date = self._parse_review_date(review.postedAtUtc)
+                        
+                        if review_date == target_date_obj:
+                            target_date_reviews.append(review)
+                            found_target_date = True
+                        elif review_date < target_date_obj:
+                            # 더 오래된 리뷰가 나오면 수집 중단
+                            older_reviews_found = True
+                            break
+                        elif review_date > target_date_obj:
+                            # 더 최신 리뷰가 나오면 계속 진행
+                            continue
+                            
+                    except (ValueError, IndexError) as e:
+                        continue
+                
+                # 해당 날짜의 리뷰 추가
+                if target_date_reviews:
+                    all_reviews.extend(target_date_reviews)
+                
+                # 더 오래된 리뷰가 발견되면 수집 중단
+                if older_reviews_found:
+                    break
+                
+                # 페이지 간 딜레이 (서버 부하 방지)
+                await asyncio.sleep(1)
+                
+                page_index += 1
+                
+            except Exception as e:
+                error_msg = str(e)
+                if "404" in error_msg or "Not Found" in error_msg:
+                    consecutive_404_errors += 1
+                    self.log_error(f"❌ 404 에러 발생 (연속 {consecutive_404_errors}회): {e}")
+                    
+                    if consecutive_404_errors >= max_404_errors:
+                        self.log_error(f"🚫 연속 404 에러 {max_404_errors}회 발생. 20분 대기 후 재시도합니다.")
+                        await asyncio.sleep(20 * 60)  # 20분 대기
+                        consecutive_404_errors = 0  # 카운터 리셋
+                    else:
+                        await asyncio.sleep(5)  # 5초 대기
+                else:
+                    self.log_error(f"페이지 {page_index} 수집 실패: {e}")
+                    consecutive_empty_pages += 1
+                
+                page_index += 1
+                await asyncio.sleep(2)
+        
+        return all_reviews
+
+    def _parse_review_date(self, utc_time_str: str) -> date:
+        """
+        리뷰의 UTC 시간 문자열을 날짜로 파싱합니다.
+        
+        Args:
+            utc_time_str: UTC 시간 문자열 (YYYY-MM-DDTHH:MM:SSZ 형식)
+        
+        Returns:
+            date: 파싱된 날짜
+        """
+        try:
+            # "YYYY-MM-DDTHH:MM:SSZ" 형식에서 날짜 부분만 추출
+            date_str = utc_time_str.split('T')[0]
+            result = datetime.strptime(date_str, "%Y-%m-%d").date()
+            return result
+        except (ValueError, IndexError) as e:
+            # 오류 발생 시 오늘 날짜 반환
+            return datetime.now().date()
+
+    def _parse_review_from_api(self, data: Dict) -> Review:
+        """
+        리뷰 API 응답의 데이터를 Review 객체로 파싱합니다.
+        
+        Args:
+            data: 리뷰 API 응답의 데이터 딕셔너리
+        
+        Returns:
+            Review: 파싱된 리뷰 객체
+        """
+        # 작성자 정보 파싱
+        author_data = data.get("author", {})
+        author = ReviewAuthor(
+            id=author_data.get("id", 0),
+            level=author_data.get("level", 1),
+            nickName=author_data.get("nickName", ""),
+            profileImage=author_data.get("profileImage", "")
+        )
+        
+        # 시술 정보 파싱
+        treatments = []
+        for treatment_data in data.get("treatments", []):
+            treatment = ReviewTreatment(
+                id=treatment_data.get("id", 0),
+                name=treatment_data.get("name", "")
+            )
+            treatments.append(treatment)
+        
+        # 병원 정보 파싱
+        hospital_data = data.get("hospital", {})
+        hospital = ReviewHospital(
+            id=hospital_data.get("id", 0),
+            name=hospital_data.get("name", ""),
+            districtName=hospital_data.get("districtName", ""),
+            country=hospital_data.get("country", "")
+        )
+        
+        # 서비스 오퍼 정보 파싱
+        service_offer = None
+        service_offer_data = data.get("serviceOffer")
+        if service_offer_data:
+            service_offer = ReviewServiceOffer(
+                id=service_offer_data.get("id", 0),
+                operationType=service_offer_data.get("operationType", "")
+            )
+        
+        # 비용 정보 파싱
+        total_cost = None
+        cost_data = data.get("totalCost")
+        if cost_data:
+            total_cost = ReviewCost(
+                currency=cost_data.get("currency", ""),
+                amount=cost_data.get("amount", 0)
+            )
+        
+        # 진행 사진 파싱
+        progress_photos = []
+        for photo_data in data.get("progressReviewPhotos", []):
+            progress_photo = ReviewProgressPhoto(
+                url=photo_data.get("url", ""),
+                progressDate=photo_data.get("progressDate", "")
+            )
+            progress_photos.append(progress_photo)
+        
+        # 시술 정보 파싱
+        amplitude_data = data.get("amplitudeTreatmentInfo", {})
+        amplitude_treatment_info = ReviewAmplitudeTreatmentInfo(
+            treatmentIdList=amplitude_data.get("treatmentIdList", []),
+            treatmentLabelList=amplitude_data.get("treatmentLabelList", []),
+            treatmentCategoryTagIdList=amplitude_data.get("treatmentCategoryTagIdList", []),
+            treatmentCategoryTagLabelList=amplitude_data.get("treatmentCategoryTagLabelList", []),
+            treatmentGroupTagIdList=amplitude_data.get("treatmentGroupTagIdList", []),
+            treatmentGroupTagLabelList=amplitude_data.get("treatmentGroupTagLabelList", []),
+            concernTagIdList=amplitude_data.get("concernTagIdList", []),
+            concernTagLabelList=amplitude_data.get("concernTagLabelList", []),
+            concernBodyPartTagIdList=amplitude_data.get("concernBodyPartTagIdList", []),
+            concernBodyPartTagLabelList=amplitude_data.get("concernBodyPartTagLabelList", [])
+        )
+        
+        # 리뷰 객체 생성
+        review = Review(
+            id=data.get("id", 0),
+            author=author,
+            treatments=treatments,
+            hospital=hospital,
+            serviceOffer=service_offer,
+            totalRating=data.get("totalRating", 0),
+            totalCost=total_cost,
+            description=data.get("description", ""),
+            descriptionLanguage=data.get("descriptionLanguage", "ko"),
+            beforePhotos=data.get("beforePhotos", []),
+            afterPhotos=data.get("afterPhotos", []),
+            postedAtUtc=data.get("postedAtUtc", ""),
+            editedLastAtUtc=data.get("editedLastAtUtc", ""),
+            procedureProofApproved=data.get("procedureProofApproved", False),
+            amplitudeTreatmentInfo=amplitude_treatment_info,
+            highlights=data.get("highlights", []),
+            progressReviewPhotos=progress_photos,
+            treatmentReceivedAtUtc=data.get("treatmentReceivedAtUtc", ""),
+            lastProgressDate=data.get("lastProgressDate"),
+            translation=data.get("translation"),
+            costChangedReasons=data.get("costChangedReasons"),
+            isProgressOnGoing=data.get("isProgressOnGoing")
+        )
+        
+        return review
 
 # 테스트 함수
 async def test_gannamunni_api():

@@ -223,6 +223,7 @@ class AsyncCollectionService:
             "target_date": target_date,
             "total_articles": 0,
             "total_comments": 0,
+            "total_reviews": 0,
             "category_results": {},
             "start_time": datetime.now().isoformat(),
             "end_time": None
@@ -242,9 +243,10 @@ class AsyncCollectionService:
                 if progress_callback:
                     progress_callback(completed_categories, total_categories, f"{category_name} 카테고리 수집 중...")
                 
-                result = await collector.collect_articles_by_date(target_date, category, save_as_reviews)
+                result = await collector.collect_articles_by_date(target_date, category, save_as_reviews, include_reviews=True)
                 results["total_articles"] += result["articles"]
                 results["total_comments"] += result["comments"]
+                results["total_reviews"] += result.get("reviews", 0)
                 results["category_results"][category] = result["articles"]
                 completed_categories += 1
                 
@@ -263,7 +265,7 @@ class AsyncCollectionService:
             
             # 수집 완료 로그
             print(f"✅ 강남언니 비동기 수집 서비스 완료!")
-            print(f"📊 전체 수집 결과: 게시글 {results['total_articles']}개, 댓글 {results['total_comments']}개")
+            print(f"📊 전체 수집 결과: 게시글 {results['total_articles']}개, 댓글 {results['total_comments']}개, 리뷰 {results['total_reviews']}개")
             print(f"⏱️  총 소요시간: {total_elapsed_time:.2f}초")
             
             # 카테고리별 상세 결과
