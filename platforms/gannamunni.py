@@ -787,17 +787,7 @@ class GangnamUnniAPI(LoggedClass):
             headers = {
                 "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36",
                 "Accept": "application/json, text/plain, */*",
-                "Accept-Language": "ko-KR,ko;q=0.9,en;q=0.8",
-                "Accept-Encoding": "gzip, deflate, br, zstd",
-                "Content-Type": "application/json",
-                "Origin": "https://env.gnsister.com",
-                "Referer": "https://env.gnsister.com/",
-                "Connection": "keep-alive",
-                "Sec-Fetch-Dest": "empty",
-                "Sec-Fetch-Mode": "cors",
-                "Sec-Fetch-Site": "same-origin",
-                "Cache-Control": "no-cache",
-                "Pragma": "no-cache",
+                "Authorization": self.token
             }
             
             # 요청 바디
@@ -1128,6 +1118,32 @@ async def test_gannamunni_api():
     logger.info("=" * 50)
     logger.info("🧪 강남언니 API 테스트 완료")
 
+async def test_get_reviews():
+    from utils.logger import get_logger
+    logger = get_logger("GANNAMUNNI_TEST")
+    
+    logger.info("🧪 강남언니 API 테스트 시작")
+    logger.info("=" * 50)
+    
+    api = GangnamUnniAPI()
+    
+    # get_reviews 함수 호출 테스트
+    logger.info(f"\n🧪 get_reviews 함수 호출 테스트")
+    try:
+        reviews = await api.get_reviews(page_index=0, page_size=20)
+        logger.info(f"📊 get_reviews 결과: {len(reviews)}개 리뷰 수집됨")
+        if reviews:
+            print(reviews)
+            # logger.info(f"📝 첫 번째 리뷰 정보:")
+            # first_review = reviews[0]
+            # logger.info(f"   ID: {getattr(first_review, 'id', 'N/A')}")
+            # logger.info(f"   작성자: {getattr(first_review, 'writer', {}).get('nickname', 'N/A') if hasattr(first_review, 'writer') else 'N/A'}")
+            # logger.info(f"   내용 미리보기: {getattr(first_review, 'contents', '')[:100]}...")
+            # logger.info(f"   작성시간: {getattr(first_review, 'postedAtUtc', 'N/A')}")
+    except Exception as e:
+        logger.error(f"❌ get_reviews 테스트 중 오류 발생: {e}")
+
+
 if __name__ == "__main__":
-    asyncio.run(test_gannamunni_api())
+    asyncio.run(test_get_reviews())
 
