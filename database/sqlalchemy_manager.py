@@ -443,6 +443,15 @@ class SQLAlchemyDatabaseManager:
         finally:
             session.close()
     
+    def get_recent_reviews(self, limit: int = 10) -> List[Dict]:
+        """최근 후기들을 조회합니다."""
+        session = self.get_session()
+        try:
+            reviews = session.query(Review).order_by(desc(Review.created_at)).limit(limit).all()
+            return [self._review_to_dict(review) for review in reviews]
+        finally:
+            session.close()
+    
     def get_reviews_count_by_filters(self, filters: Dict) -> int:
         """필터 조건에 따른 후기 수 반환"""
         session = self.get_session()

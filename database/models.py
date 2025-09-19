@@ -263,6 +263,14 @@ class DatabaseManager:
         """ID로 후기를 조회합니다."""
         return self._sqlalchemy_manager.get_review_by_id(review_id)
     
+    def get_review_by_platform_id_and_platform_review_id(self, platform_id: str, platform_review_id: str) -> Optional[Dict]:
+        """플랫폼 ID와 플랫폼 후기 ID로 후기를 조회합니다."""
+        return self._sqlalchemy_manager.get_review_by_platform_id_and_platform_review_id(platform_id, platform_review_id)
+    
+    def get_recent_reviews(self, limit: int = 10) -> List[Dict]:
+        """최근 후기들을 조회합니다."""
+        return self._sqlalchemy_manager.get_recent_reviews(limit)
+    
     def get_comment_by_id(self, comment_id: int) -> Optional[Dict]:
         """ID로 댓글을 조회합니다."""
         return self._sqlalchemy_manager.get_comment_by_id(comment_id)

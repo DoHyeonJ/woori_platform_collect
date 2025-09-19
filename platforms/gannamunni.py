@@ -1159,7 +1159,7 @@ async def test_get_reviews():
     logger.info("🧪 강남언니 API 테스트 시작")
     logger.info("=" * 50)
     
-    api = GangnamUnniAPI()
+    api = GangnamUnniAPI("ca06262d608b4ea3be4cc026454081cd")
     
     # get_reviews 함수 호출 테스트
     logger.info(f"\n🧪 get_reviews 함수 호출 테스트")
