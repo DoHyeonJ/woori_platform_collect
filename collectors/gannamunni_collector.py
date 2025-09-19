@@ -97,23 +97,33 @@ class GangnamUnniDataCollector(LoggedClass):
                         self.log_error(f"❌ 게시글 처리 실패 (ID: {article.id}): {e}")
                         continue
             
-            # 각 리뷰 처리 및 저장
-            for i, review in enumerate(reviews):
-                try:
-                    # 중복 체크: 이미 저장된 리뷰인지 확인
-                    existing_review = self.db.get_review_by_platform_id_and_platform_review_id("gangnamunni_review", str(review.id))
-                    if existing_review:
-                        self.log_info(f"⏭️  리뷰 {review.id}는 이미 저장되어 있습니다. 건너뜀")
+            # 리뷰 저장 (배치 처리)
+            batch_size = 3  # 한 번에 처리할 리뷰 수 (상세 API 호출로 인해 작게 설정)
+            for i in range(0, len(reviews), batch_size):
+                batch_reviews = reviews[i:i + batch_size]
+                self.log_info(f"📦 리뷰 배치 처리 중... ({i+1}-{min(i+batch_size, len(reviews))}/{len(reviews)})")
+                
+                # 배치 내에서 순차 처리 (API 부하 방지)
+                for review in batch_reviews:
+                    try:
+                        # 중복 체크: 이미 저장된 리뷰인지 확인
+                        existing_review = self.db.get_review_by_platform_id_and_platform_review_id("gangnamunni_review", str(review.id))
+                        if existing_review:
+                            self.log_info(f"⏭️  리뷰 {review.id}는 이미 저장되어 있습니다. 건너뜀")
+                            continue
+                        
+                        # 리뷰 정보 저장
+                        review_id = await self._save_review(review, gangnamunni_community['id'])
+                        if review_id:
+                            total_reviews += 1
+                        
+                    except Exception as e:
+                        self.log_error(f"❌ 리뷰 처리 실패 (ID: {review.id}): {e}")
                         continue
-                    
-                    # 리뷰 정보 저장
-                    review_id = await self._save_review(review, gangnamunni_community['id'])
-                    if review_id:
-                        total_reviews += 1
-                    
-                except Exception as e:
-                    self.log_error(f"❌ 리뷰 처리 실패 (ID: {review.id}): {e}")
-                    continue
+                
+                # 배치 간 딜레이 (API 부하 방지)
+                if i + batch_size < len(reviews):
+                    await asyncio.sleep(3)
             
             end_time = time.time()
             elapsed_time = end_time - start_time
@@ -451,15 +461,28 @@ class GangnamUnniDataCollector(LoggedClass):
         return saved_count
     
     async def _save_review(self, review: Review, community_id: int) -> Optional[int]:
-        """리뷰 정보를 데이터베이스에 저장"""
+        """리뷰 정보를 데이터베이스에 저장 (상세 API 호출)"""
         try:
             from database.models import Review as DBReview
+            
+            # 리뷰 상세 정보 조회
+            self.log_info(f"🔍 리뷰 상세 정보 조회 중... (ID: {review.id})")
+            review_detail = await self.api.get_review_detail(review.id)
+            
+            if not review_detail:
+                self.log_error(f"❌ 리뷰 상세 정보 조회 실패 (ID: {review.id})")
+                return None
             
             # 날짜 파싱
             try:
                 created_at = datetime.fromisoformat(review.postedAtUtc.replace('Z', '+00:00'))
             except ValueError:
                 created_at = datetime.now()
+            
+            # 상세 정보에서 데이터 추출
+            hospital_info = review_detail.get("hospital", {})
+            doctors_info = review_detail.get("doctors", [])
+            description_info = review_detail.get("description", {})
             
             # 시술 정보를 JSON으로 변환
             treatments_json = json.dumps([{
@@ -469,20 +492,24 @@ class GangnamUnniDataCollector(LoggedClass):
             
             # 병원 정보를 JSON으로 변환
             hospital_json = json.dumps({
-                'id': review.hospital.id,
-                'name': review.hospital.name,
-                'districtName': review.hospital.districtName,
-                'country': review.hospital.country
+                'id': hospital_info.get('id', 0),
+                'name': hospital_info.get('name', ''),
+                'districtName': hospital_info.get('district', ''),
+                'country': hospital_info.get('country', '')
             }, ensure_ascii=False)
             
             # 이미지 정보를 JSON으로 변환
+            before_photos = review_detail.get("beforePhotos", [])
+            after_photos = review_detail.get("afterPhotos", [])
+            progress_photos = review_detail.get("progressPhotos", [])
+            
             images_json = json.dumps({
-                'beforePhotos': review.beforePhotos,
-                'afterPhotos': review.afterPhotos,
+                'beforePhotos': [photo.get('url', '') for photo in before_photos],
+                'afterPhotos': [photo.get('url', '') for photo in after_photos],
                 'progressReviewPhotos': [{
-                    'url': photo.url,
-                    'progressDate': photo.progressDate
-                } for photo in review.progressReviewPhotos]
+                    'url': photo.get('url', ''),
+                    'progressDate': photo.get('progressDate', '')
+                } for photo in progress_photos]
             }, ensure_ascii=False)
             
             # 시술 정보를 JSON으로 변환
@@ -497,7 +524,17 @@ class GangnamUnniDataCollector(LoggedClass):
             
             # 리뷰 제목 생성
             treatment_names = [t.name for t in review.treatments]
-            title = f"{', '.join(treatment_names)} - {review.hospital.name}"
+            title = f"{', '.join(treatment_names)} - {hospital_info.get('name', '')}"
+            
+            # 의사명 추출
+            doctor_name = ""
+            if doctors_info:
+                doctor_name = doctors_info[0].get('name', '')
+            
+            # 리뷰 내용 (상세 API의 description.source.contents 사용)
+            content = review.description
+            if description_info and description_info.get('source'):
+                content = description_info['source'].get('contents', review.description)
             
             # 리뷰를 Review로 저장
             db_review = DBReview(
@@ -506,7 +543,7 @@ class GangnamUnniDataCollector(LoggedClass):
                 platform_review_id=str(review.id),
                 community_id=community_id,
                 title=title,
-                content=review.description,
+                content=content,
                 images=images_json,
                 writer_nickname=review.author.nickName,
                 writer_id=str(review.author.id),
@@ -516,8 +553,8 @@ class GangnamUnniDataCollector(LoggedClass):
                 categories=categories_json,
                 sub_categories=sub_categories_json,
                 surgery_date=review.treatmentReceivedAtUtc,
-                hospital_name=review.hospital.name,
-                doctor_name="",  # 강남언니 리뷰에는 담당의명이 없음
+                hospital_name=hospital_info.get('name', ''),
+                doctor_name=doctor_name,
                 is_blind=False,
                 is_image_blur=False,
                 is_certificated_review=review.procedureProofApproved,
@@ -526,10 +563,11 @@ class GangnamUnniDataCollector(LoggedClass):
             )
             
             review_id = self.db.insert_review(db_review)
+            self.log_info(f"✅ 리뷰 저장 완료 (ID: {review.id}, DB ID: {review_id})")
             return review_id
             
         except Exception as e:
-            print(f"    ⚠️  리뷰 저장 실패: {e}")
+            self.log_error(f"❌ 리뷰 저장 실패 (ID: {review.id}): {e}")
             return None
     
     def get_statistics(self) -> Dict:

@@ -857,11 +857,16 @@ class GangnamUnniAPI(LoggedClass):
                 # 현재 페이지의 리뷰 가져오기
                 page_reviews = await self.get_reviews(page_index=page_index, page_size=20)
                 
+                self.log_info(f"📄 페이지 {page_index + 1}: {len(page_reviews)}개 리뷰 조회")
+                
                 if not page_reviews:
                     consecutive_empty_pages += 1
+                    self.log_info(f"📭 빈 페이지 {consecutive_empty_pages}회 연속")
                     page_index += 1
                     await asyncio.sleep(1)
                     continue
+                else:
+                    consecutive_empty_pages = 0  # 리뷰가 있으면 카운터 리셋
                 
                 # 날짜별 필터링
                 target_date_reviews = []
@@ -889,9 +894,13 @@ class GangnamUnniAPI(LoggedClass):
                 # 해당 날짜의 리뷰 추가
                 if target_date_reviews:
                     all_reviews.extend(target_date_reviews)
+                    self.log_info(f"✅ 페이지 {page_index + 1}: {len(target_date_reviews)}개 리뷰 추가 (총 {len(all_reviews)}개)")
+                else:
+                    self.log_info(f"📅 페이지 {page_index + 1}: 해당 날짜 리뷰 없음")
                 
                 # 더 오래된 리뷰가 발견되면 수집 중단
                 if older_reviews_found:
+                    self.log_info(f"🛑 더 오래된 리뷰 발견으로 수집 중단 (페이지 {page_index + 1})")
                     break
                 
                 # 페이지 간 딜레이 (서버 부하 방지)
@@ -918,7 +927,32 @@ class GangnamUnniAPI(LoggedClass):
                 page_index += 1
                 await asyncio.sleep(2)
         
+        self.log_info(f"🏁 리뷰 수집 완료: 총 {len(all_reviews)}개 (페이지 {page_index}개 처리)")
         return all_reviews
+
+    async def get_review_detail(self, review_id: int) -> Optional[dict]:
+        """리뷰 상세 정보를 가져옵니다."""
+        url = "https://env.gnsister.com/review/query/page/user/procedure-journey/v1/review-detail/main"
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36",
+            "Accept": "application/json, text/plain, */*",
+            "Authorization": self.token
+        }
+        payload = {"id": review_id}
+        
+        try:
+            async with aiohttp.ClientSession() as session:
+                async with session.post(url, json=payload, headers=headers) as response:
+                    if response.status != 200:
+                        self.log_error(f"❌ 리뷰 상세 조회 실패 (ID: {review_id}): HTTP {response.status}")
+                        return None
+                    
+                    json_data = await response.json()
+                    return json_data
+                    
+        except Exception as e:
+            self.log_error(f"❌ 리뷰 상세 조회 중 오류 (ID: {review_id}): {e}")
+            return None
 
     def _parse_review_date(self, utc_time_str: str) -> date:
         """
@@ -1130,13 +1164,13 @@ async def test_get_reviews():
     # get_reviews 함수 호출 테스트
     logger.info(f"\n🧪 get_reviews 함수 호출 테스트")
     try:
-        reviews = await api.get_reviews(page_index=0, page_size=20)
+        reviews = await api.get_reviews(page_index=0, page_size=50)
         logger.info(f"📊 get_reviews 결과: {len(reviews)}개 리뷰 수집됨")
         if reviews:
             print(reviews)
             # logger.info(f"📝 첫 번째 리뷰 정보:")
             # first_review = reviews[0]
-            # logger.info(f"   ID: {getattr(first_review, 'id', 'N/A')}")
+            # logger.info(first_review)
             # logger.info(f"   작성자: {getattr(first_review, 'writer', {}).get('nickname', 'N/A') if hasattr(first_review, 'writer') else 'N/A'}")
             # logger.info(f"   내용 미리보기: {getattr(first_review, 'contents', '')[:100]}...")
             # logger.info(f"   작성시간: {getattr(first_review, 'postedAtUtc', 'N/A')}")
