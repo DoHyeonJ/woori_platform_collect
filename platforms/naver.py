@@ -477,9 +477,9 @@ class NaverCafeAPI(LoggedClass):
                     if board_content:
                         content = self.parse_content_html(board_content)
                         
-                        # 내용이 너무 길면 요약
-                        if content and len(content) > 200:
-                            content = content[:200] + "..."
+                        # 내용 길이 제한 제거 - 전체 콘텐츠 보존
+                        # if content and len(content) > 200:
+                        #     content = content[:200] + "..."
                         
                         result += f"게시글 {content_cnt}:\n제목: {article.subject}\n작성자: {article.writer_nickname}\n내용: {content}\n\n"
                     else:
@@ -705,9 +705,9 @@ class NaverCafeAPI(LoggedClass):
             # 내용 결합
             final_content = ' '.join(content_parts)
             
-            # 내용 길이 제한 (너무 긴 경우)
-            if len(final_content) > 2000:
-                final_content = final_content[:2000] + "..."
+            # 내용 길이 제한 제거 - 전체 콘텐츠 보존
+            # if len(final_content) > 2000:
+            #     final_content = final_content[:2000] + "..."
             
             return final_content
             
