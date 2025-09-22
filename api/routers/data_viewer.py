@@ -7,6 +7,7 @@ from api.models import (
     SearchRequest, SearchResponse, DataType, BulkGetRequest, BulkGetResponse
 )
 from api.dependencies import get_database_manager
+from api.utils.url_generator import ArticleURLGenerator
 from database.models import DatabaseManager
 
 router = APIRouter()
@@ -513,6 +514,14 @@ async def search_data_by_keywords(
         
         comment_responses = []
         for comment in search_results['comments']:
+            # 댓글 URL 생성
+            comment_url = ArticleURLGenerator.generate_comment_url(
+                platform_id=comment['platform_id'],
+                community_article_id=comment['community_article_id'],
+                comment_id=comment['community_comment_id'],
+                category_name=comment.get('category_name')
+            )
+            
             comment_responses.append(Comment(
                 id=comment['id'],
                 platform_id=comment['platform_id'],
@@ -525,7 +534,8 @@ async def search_data_by_keywords(
                 writer_id=comment['writer_id'],
                 like_count=comment.get('like_count', 0),
                 created_at=comment['created_at'],
-                collected_at=comment['collected_at']
+                collected_at=comment['collected_at'],
+                comment_url=comment_url
             ))
         
         review_responses = []

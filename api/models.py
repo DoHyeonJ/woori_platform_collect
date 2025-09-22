@@ -157,6 +157,7 @@ class Comment(BaseModel):
     like_count: int = Field(0, description="좋아요 수")
     created_at: Optional[datetime] = Field(None, description="작성 시간")
     collected_at: Optional[datetime] = Field(None, description="수집 시간")
+    comment_url: Optional[str] = Field(None, description="댓글 원문 링크")
 
 class Review(BaseModel):
     """후기 모델"""

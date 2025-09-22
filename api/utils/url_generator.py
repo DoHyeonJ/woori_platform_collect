@@ -98,6 +98,49 @@ class ArticleURLGenerator:
             return None
     
     @staticmethod
+    def generate_comment_url(platform_id: str, community_article_id: str, 
+                           comment_id: str, category_name: Optional[str] = None) -> Optional[str]:
+        """
+        플랫폼별 댓글 원문 URL 생성
+        
+        Args:
+            platform_id: 플랫폼 ID
+            community_article_id: 커뮤니티 게시글 ID
+            comment_id: 댓글 ID
+            category_name: 카테고리명 (네이버의 경우 카페명)
+        
+        Returns:
+            생성된 URL 또는 None
+        """
+        if not community_article_id or not comment_id:
+            return None
+            
+        try:
+            # 네이버의 경우 category_name이 없으면 게시글에서 조회
+            if platform_id == "naver" and not category_name:
+                category_name = ArticleURLGenerator._get_naver_category_from_article(community_article_id)
+            
+            # 먼저 게시글 URL을 생성
+            article_url = ArticleURLGenerator.generate_article_url(
+                platform_id, community_article_id, category_name
+            )
+            
+            if not article_url:
+                return None
+                
+            # 플랫폼별 댓글 앵커 추가
+            if platform_id == "gangnamunni":
+                return f"{article_url}"
+            elif platform_id in ["babitalk", "babitalk_talk", "babitalk_event_ask"]:
+                return f"{article_url}"
+            elif platform_id == "naver":
+                return f"{article_url}"
+            else:
+                return article_url  # 앵커를 지원하지 않는 플랫폼은 게시글 URL만 반환
+        except Exception:
+            return None
+    
+    @staticmethod
     def _generate_gangnamunni_url(article_id: str) -> str:
         """강남언니 URL 생성"""
         return f"https://www.gangnamunni.com/community/{article_id}"
@@ -116,6 +159,19 @@ class ArticleURLGenerator:
     def _generate_babitalk_event_ask_url(article_id: str) -> str:
         """바비톡 발품후기 URL 생성"""
         return f"https://web.babitalk.com/ask-memos/{article_id}"
+    
+    @staticmethod
+    def _get_naver_category_from_article(article_id: str) -> Optional[str]:
+        """네이버 게시글 ID로 카테고리명 조회"""
+        try:
+            from database.models import DatabaseManager
+            db = DatabaseManager()
+            article = db.get_article_by_platform_id_and_community_article_id("naver", article_id)
+            if article:
+                return article.get('category_name')
+        except Exception:
+            pass
+        return None
     
     @staticmethod
     def _generate_naver_url(article_id: str, category_name: Optional[str] = None) -> Optional[str]:
