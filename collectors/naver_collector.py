@@ -409,37 +409,43 @@ class NaverDataCollector(LoggedClass):
                     
                     # 중복 체크: 이미 저장된 게시글인지 먼저 확인
                     existing_article = self.db.get_article_by_platform_id_and_community_article_id("naver", article.article_id)
+                    article_saved = False
+                    
                     if existing_article:
-                        self.log_info(f"⏭️  게시글 {article.article_id}는 이미 저장되어 있습니다. 건너뜀")
-                        continue
-                    
-                    # 게시글 내용 조회
-                    content_html, created_at = await self.api.get_article_content(cafe_id, article.article_id)
-                    if content_html:
-                        article.content = self.api.parse_content_html(content_html)
-                        self.log_info(f"게시글 {article.article_id} 내용 파싱 완료")
-                        
-                        # 생성일이 없는 경우 내용 조회에서 얻은 정보로 업데이트
-                        if not article.created_at and created_at:
-                            article.created_at = created_at
-                            self.log_info(f"게시글 {article.article_id} 생성일 업데이트: {created_at}")
+                        self.log_info(f"⏭️  게시글 {article.article_id}는 이미 저장되어 있습니다. 댓글만 수집합니다.")
+                        article_saved = True
                     else:
-                        self.log_warning(f"게시글 {article.article_id} 내용 조회 실패")
-                        article.content = ""
-                    
-                    # 댓글 조회
-                    comments = await self.api.get_article_comments(cafe_id, article.article_id)
-                    self.log_info(f"게시글 {article.article_id} 댓글 {len(comments)}개 조회 완료")
-                    
-                    # 게시글 저장
-                    if await self._save_article(cafe_id, article):
-                        saved_count += 1
+                        # 게시글 내용 조회
+                        content_html, created_at = await self.api.get_article_content(cafe_id, article.article_id)
+                        if content_html:
+                            article.content = self.api.parse_content_html(content_html)
+                            self.log_info(f"게시글 {article.article_id} 내용 파싱 완료")
+                            
+                            # 생성일이 없는 경우 내용 조회에서 얻은 정보로 업데이트
+                            if not article.created_at and created_at:
+                                article.created_at = created_at
+                                self.log_info(f"게시글 {article.article_id} 생성일 업데이트: {created_at}")
+                        else:
+                            self.log_warning(f"게시글 {article.article_id} 내용 조회 실패")
+                            article.content = ""
                         
-                        # 댓글 저장
+                        # 게시글 저장
+                        if await self._save_article(cafe_id, article):
+                            saved_count += 1
+                            article_saved = True
+                    
+                    # 댓글 조회 및 저장 (게시글이 중복이어도 댓글은 수집)
+                    if article_saved:
+                        comments = await self.api.get_article_comments(cafe_id, article.article_id)
+                        self.log_info(f"게시글 {article.article_id} 댓글 {len(comments)}개 조회 완료")
+                        
                         if comments:
                             comment_saved = await self._save_comments(cafe_id, article.article_id, comments)
                             comments_saved_count += comment_saved
-                            self.log_info(f"게시글 {article.article_id} 댓글 {comment_saved}/{len(comments)}개 저장 완료")
+                            if existing_article:
+                                self.log_info(f"✅ 기존 게시글 {article.article_id}에 새 댓글 {comment_saved}개 추가")
+                            else:
+                                self.log_info(f"게시글 {article.article_id} 댓글 {comment_saved}/{len(comments)}개 저장 완료")
                         
                         details.append({
                             "article_id": article.article_id,
@@ -447,7 +453,8 @@ class NaverDataCollector(LoggedClass):
                             "status": "success",
                             "content_length": len(article.content or ""),
                             "comments_saved": len(comments),
-                            "created_at": article.created_at.isoformat() if article.created_at else None
+                            "created_at": article.created_at.isoformat() if article.created_at else None,
+                            "is_duplicate": existing_article is not None
                         })
                     else:
                         failed_count += 1

@@ -91,31 +91,34 @@ class GangnamUnniDataCollector(LoggedClass):
                     try:
                         # 중복 체크: 이미 저장된 게시글인지 확인
                         existing_article = self.db.get_article_by_platform_id_and_community_article_id("gangnamunni", str(article.id))
+                        article_id = None
+                        
                         if existing_article:
-                            self.log_info(f"⏭️  게시글 {article.id}는 이미 저장되어 있습니다. 건너뜀")
-                            continue
+                            self.log_info(f"⏭️  게시글 {article.id}는 이미 저장되어 있습니다. 댓글만 수집합니다.")
+                            article_id = existing_article['id']  # 기존 게시글의 DB ID 사용
+                        else:
+                            # 게시글 정보 저장 (리뷰가 아닌 일반 게시글)
+                            article_id = await self._save_article(article, gangnamunni_community['id'])
+                            if article_id:
+                                total_articles += 1
                         
-                        # 게시글 정보 저장 (리뷰가 아닌 일반 게시글)
-                        article_id = await self._save_article(article, gangnamunni_community['id'])
-                        
-                        if article_id:
-                            total_articles += 1
-                            
-                            # 댓글이 있는 경우 댓글도 수집
-                            if article.comment_count > 0:
-                                try:
-                                    comments = await self.api.get_comments(article.id)
-                                    if comments:
-                                        saved_comments = await self._save_comments(comments, article_id)
-                                        total_comments += saved_comments
-                                except Exception as e:
-                                    # 404 에러 발생 시 failover 처리
-                                    if "404" in str(e) or "Not Found" in str(e):
-                                        self.log_error(f"❌ 404 에러 발생: 게시글 ID {article.id} 댓글 수집 실패")
-                                        await self._handle_404_failover(target_date, category, gangnamunni_community, articles, i)
-                                        return {"articles": total_articles, "comments": total_comments, "reviews": total_reviews}
-                                    else:
-                                        self.log_error(f"❌ 댓글 수집 실패 (게시글 ID: {article.id}): {e}")
+                        # 댓글이 있는 경우 댓글 수집 (게시글이 중복이어도 댓글은 수집)
+                        if article_id and article.comment_count > 0:
+                            try:
+                                comments = await self.api.get_comments(article.id)
+                                if comments:
+                                    saved_comments = await self._save_comments(comments, article_id)
+                                    total_comments += saved_comments
+                                    if existing_article:
+                                        self.log_info(f"✅ 기존 게시글 {article.id}에 새 댓글 {saved_comments}개 추가")
+                            except Exception as e:
+                                # 404 에러 발생 시 failover 처리
+                                if "404" in str(e) or "Not Found" in str(e):
+                                    self.log_error(f"❌ 404 에러 발생: 게시글 ID {article.id} 댓글 수집 실패")
+                                    await self._handle_404_failover(target_date, category, gangnamunni_community, articles, i)
+                                    return {"articles": total_articles, "comments": total_comments, "reviews": total_reviews}
+                                else:
+                                    self.log_error(f"❌ 댓글 수집 실패 (게시글 ID: {article.id}): {e}")
                         
                     except Exception as e:
                         # 404 에러 발생 시 failover 처리
@@ -425,6 +428,12 @@ class GangnamUnniDataCollector(LoggedClass):
         
         for comment in comments:
             try:
+                # 중복 체크: 이미 저장된 댓글인지 확인
+                existing_comment = self.db.get_comment_by_article_id_and_comment_id(str(article_id), str(comment.id))
+                if existing_comment:
+                    self.log_info(f"        ⏭️  댓글 {comment.id}는 이미 저장되어 있습니다. 건너뜀")
+                    continue
+                
                 # 날짜 파싱
                 try:
                     created_at = datetime.strptime(comment.create_time, "%Y-%m-%d %H:%M:%S")
@@ -448,13 +457,15 @@ class GangnamUnniDataCollector(LoggedClass):
                 
                 self.db.insert_comment(db_comment)
                 saved_count += 1
+                self.log_info(f"        ✅ 댓글 {comment.id} 저장 완료")
                 
                 # 대댓글이 있는 경우 재귀적으로 저장
                 if comment.replies:
-                    await self._save_comments(comment.replies, article_id)
+                    replies_saved = await self._save_comments(comment.replies, article_id)
+                    saved_count += replies_saved
                 
             except Exception as e:
-                print(f"        ⚠️  댓글 저장 실패: {e}")
+                self.log_error(f"        ❌ 댓글 저장 실패 (ID: {comment.id}): {e}")
                 continue
         
         return saved_count

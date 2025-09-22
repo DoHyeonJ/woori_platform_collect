@@ -233,19 +233,36 @@ class BabitalkDataCollector(LoggedClass):
             
             # 각 자유톡 처리
             total_talks = 0
+            total_comments = 0
             for talk in talks:
                 try:
                     # 중복 체크: 이미 저장된 자유톡인지 확인
                     existing_article = self.db.get_article_by_platform_id_and_community_article_id("babitalk_talk", str(talk.id))
-                    if existing_article:
-                        self.log_info(f"⏭️  자유톡 {talk.id}는 이미 저장되어 있습니다. 건너뜀")
-                        continue
+                    article_id = None
                     
-                    # 자유톡 정보 저장
-                    talk_id = await self._save_talk(talk, babitalk_community['id'])
-                    if talk_id:
-                        total_talks += 1
-                except Exception:
+                    if existing_article:
+                        self.log_info(f"⏭️  자유톡 {talk.id}는 이미 저장되어 있습니다. 댓글만 수집합니다.")
+                        article_id = existing_article['id']  # 기존 게시글의 DB ID 사용
+                    else:
+                        # 자유톡 정보 저장
+                        article_id = await self._save_talk(talk, babitalk_community['id'])
+                        if article_id:
+                            total_talks += 1
+                    
+                    # 댓글이 있는 경우 댓글 수집 (자유톡이 중복이어도 댓글은 수집)
+                    if article_id and talk.total_comment > 0:
+                        try:
+                            comments, _ = await self.api.get_comments(talk.id, page=1)
+                            if comments:
+                                saved_comments = await self._save_comments(comments, article_id)
+                                total_comments += saved_comments
+                                if existing_article:
+                                    self.log_info(f"✅ 기존 자유톡 {talk.id}에 새 댓글 {saved_comments}개 추가")
+                        except Exception as e:
+                            self.log_error(f"❌ 댓글 수집 실패 (자유톡 ID: {talk.id}): {e}")
+                            
+                except Exception as e:
+                    self.log_error(f"❌ 자유톡 처리 실패 (ID: {talk.id}): {e}")
                     continue
             
             self.log_info(f"✅ {target_date} 날짜 자유톡 수집 완료: {total_talks}개")
