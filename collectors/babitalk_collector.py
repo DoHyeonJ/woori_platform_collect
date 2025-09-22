@@ -85,8 +85,11 @@ class BabitalkDataCollector(LoggedClass):
         Returns:
             int: 수집된 후기 수
         """
-        self.log_info(f"🚀 {target_date} 날짜 바비톡 시술 후기 수집 시작")
-        self.log_info("=" * 50)
+        import time
+        start_time = time.time()
+        last_progress_time = start_time
+        
+        self.log_info(f"🚀 바비톡 시술후기 수집 시작 - {target_date}")
         
         # 바비톡 커뮤니티 생성 또는 조회
         babitalk_community = await self._get_or_create_babitalk_community()
@@ -218,7 +221,11 @@ class BabitalkDataCollector(LoggedClass):
         Returns:
             int: 수집된 자유톡 수
         """
-        self.log_info(f"📅 {target_date} 날짜 바비톡 자유톡 수집 시작 (서비스 ID: {service_id})")
+        import time
+        start_time = time.time()
+        last_progress_time = start_time
+        
+        self.log_info(f"🚀 바비톡 자유톡 수집 시작 - {target_date} (서비스: {service_id})")
         
         # 바비톡 커뮤니티 생성 또는 조회
         babitalk_community = await self._get_or_create_babitalk_community()
@@ -228,7 +235,7 @@ class BabitalkDataCollector(LoggedClass):
             talks = await self.api.get_talks_by_date(target_date, service_id)
             
             if not talks:
-                self.log_info(f"📭 {target_date} 날짜의 자유톡이 없습니다.")
+                self.log_info(f"📭 {target_date} 수집할 데이터 없음")
                 return 0
             
             # 각 자유톡 처리
@@ -241,7 +248,6 @@ class BabitalkDataCollector(LoggedClass):
                     article_id = None
                     
                     if existing_article:
-                        self.log_info(f"⏭️  자유톡 {talk.id}는 이미 저장되어 있습니다. 댓글만 수집합니다.")
                         article_id = existing_article['id']  # 기존 게시글의 DB ID 사용
                     else:
                         # 자유톡 정보 저장
@@ -256,16 +262,23 @@ class BabitalkDataCollector(LoggedClass):
                             if comments:
                                 saved_comments = await self._save_comments(comments, article_id)
                                 total_comments += saved_comments
-                                if existing_article:
-                                    self.log_info(f"✅ 기존 자유톡 {talk.id}에 새 댓글 {saved_comments}개 추가")
                         except Exception as e:
                             self.log_error(f"❌ 댓글 수집 실패 (자유톡 ID: {talk.id}): {e}")
+                    
+                    # 10분마다 진행상태 로그
+                    current_time = time.time()
+                    if current_time - last_progress_time >= 600:  # 10분 = 600초
+                        self.log_info(f"📊 바비톡 수집 진행중... {talks.index(talk)+1}/{len(talks)} (자유톡: {total_talks}개, 댓글: {total_comments}개)")
+                        last_progress_time = current_time
                             
                 except Exception as e:
                     self.log_error(f"❌ 자유톡 처리 실패 (ID: {talk.id}): {e}")
                     continue
             
-            self.log_info(f"✅ {target_date} 날짜 자유톡 수집 완료: {total_talks}개")
+            end_time = time.time()
+            elapsed_time = end_time - start_time
+            self.log_info(f"✅ 바비톡 자유톡 수집 완료 - {target_date}")
+            self.log_info(f"📊 결과: 자유톡 {total_talks}개, 댓글 {total_comments}개 (소요시간: {elapsed_time:.2f}초)")
             return total_talks
             
         except Exception as e:

@@ -308,14 +308,17 @@ class NaverDataCollector(LoggedClass):
     
     async def collect_articles_by_date_with_comments(self, cafe_id: str, target_date: str, menu_id: str = "") -> Dict[str, Any]:
         """특정 날짜의 모든 게시글을 수집하고 댓글까지 포함하여 저장 (여러 게시판 지원)"""
+        import time
+        start_time = time.time()
+        last_progress_time = start_time
+        
         try:
-            self.log_info(f"날짜별 게시글과 댓글 전체 수집 시작 (카페 ID: {cafe_id}, 날짜: {target_date}, 게시판: {menu_id})")
+            self.log_info(f"🚀 네이버 카페 수집 시작 - {target_date} (카페: {cafe_id})")
             
             # 날짜를 datetime 객체로 변환
             from datetime import datetime
             try:
                 target_datetime = datetime.strptime(target_date, "%Y-%m-%d")
-                self.log_info(f"대상 날짜: {target_datetime}")
             except ValueError as e:
                 self.log_error(f"날짜 형식 오류: {target_date}, 예상 형식: YYYY-MM-DD")
                 return {"total": 0, "saved": 0, "failed": 0, "comments_saved": 0, "details": [], "error": f"날짜 형식 오류: {str(e)}"}
@@ -327,8 +330,6 @@ class NaverDataCollector(LoggedClass):
             
             while True:
                 try:
-                    self.log_info(f"게시글 목록 조회 중... (페이지: {page}) - 대상 날짜: {target_datetime.date()}")
-                    
                     # 여러 게시판 지원: menu_id에 콤마가 있으면 여러 게시판 조회
                     if ',' in menu_id:
                         articles = await self.api.get_article_list_multi_menus(cafe_id, menu_id, page, per_page)
@@ -336,19 +337,7 @@ class NaverDataCollector(LoggedClass):
                         articles = await self.api.get_article_list(cafe_id, menu_id, page, per_page)
                     
                     if not articles:
-                        self.log_info(f"페이지 {page}에서 더 이상 게시글이 없습니다")
                         break
-                    
-                    # 현재 페이지의 게시글 날짜 분포 확인
-                    article_dates = []
-                    for article in articles:
-                        if article.created_at:
-                            article_dates.append(article.created_at.date())
-                    
-                    if article_dates:
-                        min_date = min(article_dates)
-                        max_date = max(article_dates)
-                        self.log_info(f"페이지 {page} 게시글 날짜 범위: {min_date} ~ {max_date}")
                     
                     # 해당 날짜의 게시글만 필터링
                     date_filtered_articles = []
@@ -359,27 +348,19 @@ class NaverDataCollector(LoggedClass):
                             article_date = article.created_at.date()
                             if article_date == target_datetime.date():
                                 date_filtered_articles.append(article)
-                                self.log_info(f"대상 날짜 게시글 발견: {article.article_id} - {article_date}")
                             elif article_date < target_datetime.date():
                                 older_than_target += 1
-                        else:
-                            self.log_warning(f"게시글 {article.article_id}의 생성일이 없습니다")
                     
                     if date_filtered_articles:
                         all_articles.extend(date_filtered_articles)
-                        self.log_info(f"페이지 {page}에서 {len(date_filtered_articles)}개 게시글 필터링 완료 (총 {len(all_articles)}개)")
-                    else:
-                        self.log_info(f"페이지 {page}에서 대상 날짜({target_datetime.date()})의 게시글이 없음")
                     
                     # 조기 종료 조건 개선
                     # 1. 전체 게시글이 대상 날짜보다 오래된 경우
                     if older_than_target > 0 and len(date_filtered_articles) == 0:
-                        self.log_info(f"페이지 {page}에서 대상 날짜보다 오래된 게시글 {older_than_target}개 발견, 검색 중단")
                         break
                     
                     # 2. 너무 많은 페이지를 조회한 경우 (무한 루프 방지)
                     if page >= 50:  # 최대 50페이지까지만 조회
-                        self.log_warning(f"최대 페이지 수({page})에 도달하여 검색 중단")
                         break
                     
                     page += 1
@@ -392,10 +373,8 @@ class NaverDataCollector(LoggedClass):
                     break
             
             if not all_articles:
-                self.log_warning(f"{target_date} 날짜에 해당하는 게시글이 없습니다")
+                self.log_warning(f"📭 {target_date} 수집할 데이터 없음")
                 return {"total": 0, "saved": 0, "failed": 0, "comments_saved": 0, "details": [], "message": "해당 날짜의 게시글이 없습니다"}
-            
-            self.log_info(f"총 {len(all_articles)}개 게시글 필터링 완료")
             
             # 각 게시글의 내용과 댓글 조회
             saved_count = 0
@@ -405,28 +384,22 @@ class NaverDataCollector(LoggedClass):
             
             for i, article in enumerate(all_articles):
                 try:
-                    self.log_info(f"게시글 {i+1}/{len(all_articles)} 처리 중... (ID: {article.article_id})")
-                    
                     # 중복 체크: 이미 저장된 게시글인지 먼저 확인
                     existing_article = self.db.get_article_by_platform_id_and_community_article_id("naver", article.article_id)
                     article_saved = False
                     
                     if existing_article:
-                        self.log_info(f"⏭️  게시글 {article.article_id}는 이미 저장되어 있습니다. 댓글만 수집합니다.")
                         article_saved = True
                     else:
                         # 게시글 내용 조회
                         content_html, created_at = await self.api.get_article_content(cafe_id, article.article_id)
                         if content_html:
                             article.content = self.api.parse_content_html(content_html)
-                            self.log_info(f"게시글 {article.article_id} 내용 파싱 완료")
                             
                             # 생성일이 없는 경우 내용 조회에서 얻은 정보로 업데이트
                             if not article.created_at and created_at:
                                 article.created_at = created_at
-                                self.log_info(f"게시글 {article.article_id} 생성일 업데이트: {created_at}")
                         else:
-                            self.log_warning(f"게시글 {article.article_id} 내용 조회 실패")
                             article.content = ""
                         
                         # 게시글 저장
@@ -437,15 +410,10 @@ class NaverDataCollector(LoggedClass):
                     # 댓글 조회 및 저장 (게시글이 중복이어도 댓글은 수집)
                     if article_saved:
                         comments = await self.api.get_article_comments(cafe_id, article.article_id)
-                        self.log_info(f"게시글 {article.article_id} 댓글 {len(comments)}개 조회 완료")
                         
                         if comments:
                             comment_saved = await self._save_comments(cafe_id, article.article_id, comments)
                             comments_saved_count += comment_saved
-                            if existing_article:
-                                self.log_info(f"✅ 기존 게시글 {article.article_id}에 새 댓글 {comment_saved}개 추가")
-                            else:
-                                self.log_info(f"게시글 {article.article_id} 댓글 {comment_saved}/{len(comments)}개 저장 완료")
                         
                         details.append({
                             "article_id": article.article_id,
@@ -464,6 +432,12 @@ class NaverDataCollector(LoggedClass):
                             "status": "failed",
                             "reason": "저장 실패"
                         })
+                    
+                    # 10분마다 진행상태 로그
+                    current_time = time.time()
+                    if current_time - last_progress_time >= 600:  # 10분 = 600초
+                        self.log_info(f"📊 네이버 수집 진행중... {i+1}/{len(all_articles)} (게시글: {saved_count}개, 댓글: {comments_saved_count}개)")
+                        last_progress_time = current_time
                     
                     # API 호출 간격 조절
                     await asyncio.sleep(0.3)
@@ -488,7 +462,10 @@ class NaverDataCollector(LoggedClass):
                 "details": details
             }
             
-            self.log_info(f"날짜별 게시글과 댓글 전체 수집 완료: {saved_count}/{len(all_articles)}개 저장, 댓글 {comments_saved_count}개 저장")
+            end_time = time.time()
+            elapsed_time = end_time - start_time
+            self.log_info(f"✅ 네이버 카페 수집 완료 - {target_date}")
+            self.log_info(f"📊 결과: 게시글 {saved_count}/{len(all_articles)}개, 댓글 {comments_saved_count}개 (소요시간: {elapsed_time:.2f}초)")
             return result
             
         except Exception as e:

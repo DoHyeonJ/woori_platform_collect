@@ -26,7 +26,9 @@ class GangnamUnniDataCollector(LoggedClass):
         """
         import time
         start_time = time.time()
-        self.log_info(f"📅 {target_date} 날짜 강남언니 {category} 게시글 수집 시작...")
+        last_progress_time = start_time
+        
+        self.log_info(f"🚀 강남언니 {category} 수집 시작 - {target_date}")
         
         # 강남언니 커뮤니티 생성 또는 조회
         gangnamunni_community = await self._get_or_create_gannamunni_community()
@@ -38,14 +40,12 @@ class GangnamUnniDataCollector(LoggedClass):
             # 실제 리뷰 API에서 리뷰 수집 (include_reviews가 True인 경우)
             reviews = []
             if include_reviews:
-                self.log_info(f"📝 {target_date} 날짜 강남언니 리뷰 수집 시작...")
                 reviews = await self.api.get_reviews_by_date(target_date)
-                self.log_info(f"📊 리뷰 수집 완료: {len(reviews)}개")
             
             if not articles and not reviews:
                 end_time = time.time()
                 elapsed_time = end_time - start_time
-                self.log_info(f"📭 {target_date} 날짜에 수집할 게시글과 리뷰가 없습니다. (소요시간: {elapsed_time:.2f}초)")
+                self.log_info(f"📭 {target_date} 수집할 데이터 없음 (소요시간: {elapsed_time:.2f}초)")
                 return {"articles": 0, "comments": 0, "reviews": 0}
             
             # 1. 리뷰 먼저 저장 (실제 리뷰 데이터만)
@@ -54,11 +54,9 @@ class GangnamUnniDataCollector(LoggedClass):
             total_reviews = 0
             
             if reviews:
-                self.log_info(f"📝 {len(reviews)}개 리뷰 저장 시작...")
                 batch_size = 3  # 한 번에 처리할 리뷰 수 (상세 API 호출로 인해 작게 설정)
                 for i in range(0, len(reviews), batch_size):
                     batch_reviews = reviews[i:i + batch_size]
-                    self.log_info(f"📦 리뷰 배치 처리 중... ({i+1}-{min(i+batch_size, len(reviews))}/{len(reviews)})")
                     
                     # 배치 내에서 순차 처리 (API 부하 방지)
                     for review in batch_reviews:
@@ -66,7 +64,6 @@ class GangnamUnniDataCollector(LoggedClass):
                             # 중복 체크: 이미 저장된 리뷰인지 확인
                             existing_review = self.db.get_review_by_platform_id_and_platform_review_id("gangnamunni_review", str(review.id))
                             if existing_review:
-                                self.log_info(f"⏭️  리뷰 {review.id}는 이미 저장되어 있습니다. 건너뜀")
                                 continue
                             
                             # 리뷰 정보 저장
@@ -81,12 +78,15 @@ class GangnamUnniDataCollector(LoggedClass):
                     # 배치 간 딜레이 (API 부하 방지)
                     if i + batch_size < len(reviews):
                         await asyncio.sleep(3)
-                
-                self.log_info(f"✅ 리뷰 저장 완료: {total_reviews}개")
+                    
+                    # 10분마다 진행상태 로그
+                    current_time = time.time()
+                    if current_time - last_progress_time >= 600:  # 10분 = 600초
+                        self.log_info(f"📊 리뷰 수집 진행중... {i+1}/{len(reviews)} (저장: {total_reviews}개)")
+                        last_progress_time = current_time
             
             # 2. 게시글 저장 (리뷰가 아닌 일반 게시글)
             if articles:
-                self.log_info(f"📄 {len(articles)}개 게시글 저장 시작...")
                 for i, article in enumerate(articles):
                     try:
                         # 중복 체크: 이미 저장된 게시글인지 확인
@@ -94,7 +94,6 @@ class GangnamUnniDataCollector(LoggedClass):
                         article_id = None
                         
                         if existing_article:
-                            self.log_info(f"⏭️  게시글 {article.id}는 이미 저장되어 있습니다. 댓글만 수집합니다.")
                             article_id = existing_article['id']  # 기존 게시글의 DB ID 사용
                         else:
                             # 게시글 정보 저장 (리뷰가 아닌 일반 게시글)
@@ -109,8 +108,6 @@ class GangnamUnniDataCollector(LoggedClass):
                                 if comments:
                                     saved_comments = await self._save_comments(comments, article_id)
                                     total_comments += saved_comments
-                                    if existing_article:
-                                        self.log_info(f"✅ 기존 게시글 {article.id}에 새 댓글 {saved_comments}개 추가")
                             except Exception as e:
                                 # 404 에러 발생 시 failover 처리
                                 if "404" in str(e) or "Not Found" in str(e):
@@ -119,6 +116,12 @@ class GangnamUnniDataCollector(LoggedClass):
                                     return {"articles": total_articles, "comments": total_comments, "reviews": total_reviews}
                                 else:
                                     self.log_error(f"❌ 댓글 수집 실패 (게시글 ID: {article.id}): {e}")
+                        
+                        # 10분마다 진행상태 로그
+                        current_time = time.time()
+                        if current_time - last_progress_time >= 600:  # 10분 = 600초
+                            self.log_info(f"📊 게시글 수집 진행중... {i+1}/{len(articles)} (게시글: {total_articles}개, 댓글: {total_comments}개)")
+                            last_progress_time = current_time
                         
                     except Exception as e:
                         # 404 에러 발생 시 failover 처리
@@ -129,16 +132,13 @@ class GangnamUnniDataCollector(LoggedClass):
                         else:
                             self.log_error(f"❌ 게시글 처리 실패 (ID: {article.id}): {e}")
                             continue
-                
-                self.log_info(f"✅ 게시글 저장 완료: {total_articles}개")
             
             end_time = time.time()
             elapsed_time = end_time - start_time
             
             # 수집 완료 로그
-            self.log_info(f"✅ {target_date} 날짜 게시글 및 리뷰 수집 완료!")
-            self.log_info(f"📊 수집 결과: 게시글 {total_articles}개, 댓글 {total_comments}개, 리뷰 {total_reviews}개")
-            self.log_info(f"⏱️  소요시간: {elapsed_time:.2f}초")
+            self.log_info(f"✅ 강남언니 {category} 수집 완료 - {target_date}")
+            self.log_info(f"📊 결과: 게시글 {total_articles}개, 댓글 {total_comments}개, 리뷰 {total_reviews}개 (소요시간: {elapsed_time:.2f}초)")
             
             return {"articles": total_articles, "comments": total_comments, "reviews": total_reviews}
             
@@ -431,7 +431,6 @@ class GangnamUnniDataCollector(LoggedClass):
                 # 중복 체크: 이미 저장된 댓글인지 확인
                 existing_comment = self.db.get_comment_by_article_id_and_comment_id(str(article_id), str(comment.id))
                 if existing_comment:
-                    self.log_info(f"        ⏭️  댓글 {comment.id}는 이미 저장되어 있습니다. 건너뜀")
                     continue
                 
                 # 날짜 파싱
@@ -457,7 +456,6 @@ class GangnamUnniDataCollector(LoggedClass):
                 
                 self.db.insert_comment(db_comment)
                 saved_count += 1
-                self.log_info(f"        ✅ 댓글 {comment.id} 저장 완료")
                 
                 # 대댓글이 있는 경우 재귀적으로 저장
                 if comment.replies:
