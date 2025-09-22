@@ -11,13 +11,13 @@ class ArticleURLGenerator:
     # 네이버 카페 ID 매핑 (카페 이름 -> 카페 URL ID)
     # 실제 카페 URL에서 사용되는 ID (숫자 ID -> URL ID)
     NAVER_CAFE_IDS = {
-        "10912875": "fox5282",      # 여우야
-        "12285441": "aplusfox",     # A+여우야
-        "11498714": "plasticwiki",  # 성형위키백과
-        "13067396": "foxlife",      # 여생남정
-        "23451561": "chicment",     # 시크먼트
-        "15880379": "gaasa",        # 가아사
-        "10050813": "powderroom"    # 파우더룸
+        "10912875": "feko",      # 여우야
+        "12285441": "fox5282",     # A+여우야
+        "11498714": "juliett00",  # 성형위키백과
+        "13067396": "suddes",      # 여생남정
+        "23451561": "parisienlook",     # 시크먼트
+        "15880379": "luxury009",        # 가아사
+        "10050813": "cosmania"    # 파우더룸
     }
     
     # 카페 이름 -> 숫자 ID 매핑 (기존 매핑 유지)
@@ -56,6 +56,8 @@ class ArticleURLGenerator:
             elif platform_id == "babitalk":
                 return ArticleURLGenerator._generate_babitalk_review_url(community_article_id)
             elif platform_id == "babitalk_talk":
+                return ArticleURLGenerator._generate_babitalk_review_url(community_article_id)
+            elif platform_id == "babitalk_review":
                 return ArticleURLGenerator._generate_babitalk_talk_url(community_article_id)
             elif platform_id == "babitalk_event_ask":
                 return ArticleURLGenerator._generate_babitalk_event_ask_url(community_article_id)
@@ -87,6 +89,8 @@ class ArticleURLGenerator:
             
         try:
             if platform_id == "babitalk":
+                return ArticleURLGenerator._generate_babitalk_review_url(platform_review_id)
+            elif platform_id == "babitalk_review":
                 return ArticleURLGenerator._generate_babitalk_review_url(platform_review_id)
             else:
                 return None
