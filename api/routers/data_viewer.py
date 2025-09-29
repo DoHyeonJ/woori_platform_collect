@@ -12,6 +12,45 @@ from database.models import DatabaseManager
 
 router = APIRouter()
 
+def _parse_naver_cafe_filter(naver_cafes: Optional[str]) -> Optional[List[str]]:
+    """
+    네이버 카페 필터를 파싱하여 카페명 리스트로 변환
+    
+    Args:
+        naver_cafes: 카페명 또는 카페ID (콤마로 구분)
+    
+    Returns:
+        카페명 리스트 또는 None
+    """
+    if not naver_cafes:
+        return None
+    
+    cafe_list = [cafe.strip() for cafe in naver_cafes.split(',') if cafe.strip()]
+    if not cafe_list:
+        return None
+    
+    # 카페 ID를 카페명으로 변환
+    cafe_names = []
+    for cafe in cafe_list:
+        # 숫자로만 구성된 경우 카페 ID로 간주
+        if cafe.isdigit():
+            # 카페 ID로 카페명 찾기 (역방향 매핑)
+            cafe_name = None
+            for name, cafe_id in ArticleURLGenerator.NAVER_CAFE_NAME_TO_ID.items():
+                if cafe_id == cafe:
+                    cafe_name = name
+                    break
+            if cafe_name:
+                cafe_names.append(cafe_name)
+            else:
+                # 매핑되지 않은 카페 ID는 그대로 사용
+                cafe_names.append(cafe)
+        else:
+            # 카페명인 경우 그대로 사용
+            cafe_names.append(cafe)
+    
+    return cafe_names if cafe_names else None
+
 @router.get("/articles", response_model=PaginatedResponse)
 async def get_articles(
     platform: Optional[PlatformType] = Query(None, description="플랫폼 필터"),
@@ -387,6 +426,7 @@ async def search_data_by_keywords(
     keywords: str = Query(..., description="검색 키워드 (콤마로 구분)"),
     platforms: Optional[str] = Query(None, description="플랫폼 필터 (콤마로 구분, 예: gangnamunni,babitalk)"),
     data_types: Optional[str] = Query(None, description="데이터 타입 필터 (콤마로 구분, 예: article,comment,review)"),
+    naver_cafes: Optional[str] = Query(None, description="네이버 카페 필터 (콤마로 구분, 카페명 또는 카페ID, 예: 여우야,A+여우야 또는 10912875,12285441)"),
     start_date: Optional[str] = Query(None, description="시작 날짜 (YYYY-MM-DD)"),
     end_date: Optional[str] = Query(None, description="종료 날짜 (YYYY-MM-DD)"),
     page: int = Query(1, ge=1, description="페이지 번호"),
@@ -399,6 +439,7 @@ async def search_data_by_keywords(
     - **keywords**: 검색할 키워드들 (콤마로 구분)
     - **platforms**: 플랫폼 필터 (콤마로 구분, 예: gangnamunni,babitalk)
     - **data_types**: 데이터 타입 필터 (콤마로 구분, 예: article,comment,review)
+    - **naver_cafes**: 네이버 카페 필터 (콤마로 구분, 카페명 또는 카페ID, 예: 여우야,A+여우야 또는 10912875,12285441)
     - **start_date**: 검색 시작 날짜 (YYYY-MM-DD 형식)
     - **end_date**: 검색 종료 날짜 (YYYY-MM-DD 형식)
     - **page**: 페이지 번호 (기본값: 1)
@@ -439,6 +480,9 @@ async def search_data_by_keywords(
                         detail=f"유효하지 않은 데이터 타입: {data_type}. 유효한 타입: {', '.join(valid_data_types)}"
                     )
         
+        # 네이버 카페 필터 파싱
+        naver_cafe_list = _parse_naver_cafe_filter(naver_cafes)
+        
         # 날짜 형식 검증
         if start_date:
             try:
@@ -468,6 +512,7 @@ async def search_data_by_keywords(
             data_types=data_type_list,
             start_date=start_date,
             end_date=end_date,
+            naver_cafes=naver_cafe_list,
             limit=limit,
             offset=offset
         )
@@ -478,7 +523,8 @@ async def search_data_by_keywords(
             platforms=platform_list,
             data_types=data_type_list,
             start_date=start_date,
-            end_date=end_date
+            end_date=end_date,
+            naver_cafes=naver_cafe_list
         )
         
         # 응답 데이터 변환
