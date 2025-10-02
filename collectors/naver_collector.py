@@ -36,7 +36,6 @@ class NaverDataCollector(LoggedClass):
             
             if existing_community:
                 community_id = existing_community['id']
-                self.log_info(f"기존 네이버 커뮤니티 사용: ID {community_id}")
                 return community_id
             else:
                 # 커뮤니티 생성
@@ -48,7 +47,6 @@ class NaverDataCollector(LoggedClass):
                     description="네이버 카페 데이터 수집을 위한 커뮤니티"
                 )
                 community_id = self.db.insert_community(community)
-                self.log_info(f"새 네이버 커뮤니티 생성: ID {community_id}")
                 return community_id
                 
         except Exception as e:
@@ -59,15 +57,10 @@ class NaverDataCollector(LoggedClass):
     async def collect_board_list(self, cafe_id: str) -> List[NaverCafeMenu]:
         """게시판 목록 수집"""
         try:
-            self.log_info(f"게시판 목록 수집 시작 (카페 ID: {cafe_id})")
             
             boards = await self.api.get_board_list(cafe_id)
             
-            if boards:
-                self.log_info(f"게시판 {len(boards)}개 수집 완료")
-                for board in boards:
-                    self.log_info(f"  - {board.menu_name} (ID: {board.menu_id}, 타입: {board.menu_type})")
-            else:
+            if not boards:
                 self.log_warning("수집된 게시판이 없습니다")
             
             return boards
@@ -79,16 +72,13 @@ class NaverDataCollector(LoggedClass):
     async def collect_board_title_and_content(self, cafe_id: str, menu_id: str = "", per_page: int = 20) -> str:
         """게시판의 게시글 제목과 내용을 함께 조회"""
         try:
-            self.log_info(f"게시글 제목과 내용 조회 시작 (카페 ID: {cafe_id}, 메뉴 ID: {menu_id})")
             
             # API를 통해 게시글 제목과 내용 조회
             result = await self.api.get_board_title_and_content(cafe_id, menu_id, per_page)
             
             if result:
-                self.log_info(f"게시글 제목과 내용 조회 완료: {per_page}개")
                 return result
             else:
-                self.log_warning("게시글 제목과 내용 조회 실패")
                 return "게시글 조회에 실패했습니다."
                 
         except Exception as e:
@@ -98,7 +88,6 @@ class NaverDataCollector(LoggedClass):
     async def collect_articles_with_detailed_content(self, cafe_id: str, menu_id: str = "", per_page: int = 20) -> Dict[str, Any]:
         """게시글을 상세 내용과 함께 수집하고 데이터베이스에 저장"""
         try:
-            self.log_info(f"상세 내용과 함께 게시글 수집 시작 (카페 ID: {cafe_id}, 메뉴 ID: {menu_id})")
             
             # 게시글과 내용 함께 조회
             articles = await self.api.get_articles_with_content(cafe_id, menu_id, per_page)
@@ -114,7 +103,6 @@ class NaverDataCollector(LoggedClass):
             
             for i, article in enumerate(articles):
                 try:
-                    self.log_info(f"게시글 {i+1}/{len(articles)} 저장 중...")
                     
                     if await self._save_article(cafe_id, article):
                         saved_count += 1
@@ -151,7 +139,6 @@ class NaverDataCollector(LoggedClass):
                 "details": details
             }
             
-            self.log_info(f"상세 내용과 함께 게시글 수집 완료: {saved_count}/{len(articles)}개 저장")
             return result
             
         except Exception as e:
@@ -193,7 +180,6 @@ class NaverDataCollector(LoggedClass):
             
             for i, article_data in enumerate(articles_data):
                 try:
-                    self.log_info(f"게시글 {i+1}/{len(articles_data)} 저장 중...")
                     
                     article = article_data['article']
                     comments = article_data['comments']
@@ -201,7 +187,6 @@ class NaverDataCollector(LoggedClass):
                     # 중복 체크: 이미 저장된 게시글인지 먼저 확인
                     existing_article = self.db.get_article_by_platform_id_and_community_article_id("naver", article.article_id)
                     if existing_article:
-                        self.log_info(f"⏭️  게시글 {article.article_id}는 이미 저장되어 있습니다. 건너뜀")
                         continue
                     
                     # 게시글 저장
@@ -212,7 +197,6 @@ class NaverDataCollector(LoggedClass):
                         if comments:
                             comment_saved = await self._save_comments(cafe_id, article.article_id, comments)
                             comments_saved_count += comment_saved
-                            self.log_info(f"게시글 {article.article_id} 댓글 {comment_saved}/{len(comments)}개 저장 완료")
                         
                         details.append({
                             "article_id": article.article_id,
@@ -249,7 +233,6 @@ class NaverDataCollector(LoggedClass):
                 "details": details
             }
             
-            self.log_info(f"상세 내용과 댓글과 함께 게시글 수집 완료: {saved_count}/{len(articles_data)}개 저장, 댓글 {comments_saved_count}개 저장")
             return result
             
         except Exception as e:
@@ -290,7 +273,6 @@ class NaverDataCollector(LoggedClass):
                     # 중복 체크: 이미 저장된 게시글인지 먼저 확인
                     existing_article = self.db.get_article_by_platform_id_and_community_article_id("naver", article.article_id)
                     if existing_article:
-                        self.log_info(f"⏭️  게시글 {article.article_id}는 이미 저장되어 있습니다. 건너뜀")
                         continue
                     
                     if await self._save_article(cafe_id, article):
@@ -299,7 +281,6 @@ class NaverDataCollector(LoggedClass):
                     self.log_error(f"게시글 {article.article_id} 저장 실패: {str(e)}")
                     continue
             
-            self.log_info(f"게시글 수집 완료: {saved_count}/{len(articles)}개 저장")
             return saved_count
             
         except Exception as e:
@@ -497,7 +478,6 @@ class NaverDataCollector(LoggedClass):
                     self.log_error(f"게시글 {article.article_id} 저장 실패: {str(e)}")
                     continue
             
-            self.log_info(f"날짜별 게시글 수집 완료: {saved_count}/{len(articles)}개 저장")
             return saved_count
             
         except Exception as e:
@@ -574,7 +554,6 @@ class NaverDataCollector(LoggedClass):
             article_id = self.db.insert_article(db_article)
             
             if article_id:
-                self.log_info(f"게시글 {article.article_id} 저장 완료 (DB ID: {article_id})")
                 return True
             else:
                 self.log_error(f"게시글 {article.article_id} 저장 실패")
@@ -604,7 +583,7 @@ class NaverDataCollector(LoggedClass):
                     # 이미 저장된 댓글인지 확인 (기존 테이블 구조 사용)
                     existing = self.db.get_comment_by_article_id_and_comment_id(str(db_article_id), comment['comment_id'])
                     if existing:
-                        self.log_info(f"댓글 {comment['comment_id']}는 이미 저장되어 있습니다")
+                        # self.log_info(f"댓글 {comment['comment_id']}는 이미 저장되어 있습니다")
                         continue
                     
                     # Comment 객체 생성 - 개선된 방식 사용

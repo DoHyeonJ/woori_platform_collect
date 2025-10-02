@@ -52,9 +52,8 @@ class NaverCafeAPI(LoggedClass):
         # 쿠키가 있는 경우 헤더에 추가
         if naver_cookies and naver_cookies.strip():
             self.headers["Cookie"] = naver_cookies.strip()
-            self.log_info(f"네이버 쿠키 설정됨: {naver_cookies[:50]}...")
         else:
-            self.log_warning("네이버 쿠키가 설정되지 않았습니다. 일부 API 호출이 실패할 수 있습니다.")
+            self.log_warning("네이버 쿠키가 설정되지 않았습니다.")
         
         # 주요 카페 ID 목록
         self.cafe_ids = {
@@ -70,33 +69,19 @@ class NaverCafeAPI(LoggedClass):
     async def get_board_list(self, cafe_id: str) -> List[NaverCafeMenu]:
         """게시판 목록 조회"""
         try:
-            self.log_info(f"게시판 목록 조회 시작 (카페 ID: {cafe_id})")
-            
-            # 새로운 네이버 API 엔드포인트 사용
             url = f"https://article.cafe.naver.com/gw/v3/cafes/{cafe_id}/menus"
             params = {
                 "useCafeId": "true",
                 "requestFrom": "A"
             }
             
-            self.log_info(f"요청 URL: {url}")
-            # self.log_info(f"요청 파라미터: {params}")
-            # self.log_info(f"요청 헤더: {self.headers}")
-            
             async with aiohttp.ClientSession() as session:
                 async with session.get(url, params=params, headers=self.headers) as response:
-                    self.log_info(f"응답 상태 코드: {response.status}")
-                    self.log_info(f"응답 헤더: {dict(response.headers)}")
-                    
                     if response.status == 200:
                         data = await response.json()
-                        self.log_info(f"응답 데이터 키: {list(data.keys()) if isinstance(data, dict) else 'Not a dict'}")
                         
-                        # 새로운 API 응답 구조에 맞춰 수정
                         if 'result' in data and 'menus' in data['result']:
                             menus = data['result']['menus']
-                            self.log_info(f"메뉴 개수: {len(menus)}개")
-                            
                             menu_list = []
                             for menu in menus:
                                 # P(프로필), L(링크), F(폴더) 제외
@@ -109,32 +94,20 @@ class NaverCafeAPI(LoggedClass):
                                         sort=menu.get('sort', 0)
                                     ))
                             
-                            # 정렬 순서대로 정렬
                             menu_list.sort(key=lambda x: x.sort)
-                            self.log_info(f"게시판 {len(menu_list)}개 조회 완료")
                             return menu_list
                         else:
-                            self.log_error("게시판 목록 데이터 구조가 올바르지 않습니다")
-                            self.log_error(f"응답 구조: {list(data.keys()) if isinstance(data, dict) else 'Not a dict'}")
-                            if 'result' in data:
-                                self.log_error(f"result 구조: {list(data['result'].keys()) if isinstance(data['result'], dict) else 'Not a dict'}")
                             return []
                     else:
-                        response_text = await response.text()
-                        self.log_error(f"게시판 목록 조회 실패: HTTP {response.status}")
-                        self.log_error(f"응답 내용: {response_text}")
                         return []
                         
         except Exception as e:
-            self.log_error(f"게시판 목록 조회 중 오류 발생: {str(e)}")
-            import traceback
-            self.log_error(f"상세 오류: {traceback.format_exc()}")
+            self.log_error(f"게시판 목록 조회 실패: {str(e)}")
             return []
     
     async def get_article_list(self, cafe_id: str, menu_id: str = "", page: int = 1, per_page: int = 20) -> List[NaverCafeArticle]:
         """게시글 목록 조회"""
         try:
-            self.log_info(f"게시글 목록 조회 시작 (카페 ID: {cafe_id}, 메뉴 ID: {menu_id}, 페이지: {page})")
             
             url = f"{self.base_url}/cafe-web/cafe2/ArticleListV2dot1.json"
             params = {
@@ -175,7 +148,6 @@ class NaverCafeAPI(LoggedClass):
                                     like_count=article.get('likeCount', 0)
                                 ))
                             
-                            self.log_info(f"게시글 {len(article_list)}개 조회 완료")
                             return article_list
                         else:
                             self.log_error("게시글 목록 데이터 구조가 올바르지 않습니다")
@@ -205,7 +177,6 @@ class NaverCafeAPI(LoggedClass):
                 self.log_warning("유효한 menu_id가 없습니다")
                 return []
             
-            self.log_info(f"여러 게시판 게시글 목록 조회 시작 (카페 ID: {cafe_id}, 게시판: {menu_list})")
             
             all_articles = []
             
@@ -226,12 +197,10 @@ class NaverCafeAPI(LoggedClass):
                 
                 if result:
                     all_articles.extend(result)
-                    self.log_info(f"게시판 {menu_list[i]}: {len(result)}개 게시글 조회 완료")
             
             # 게시글 ID 순으로 정렬 (중복 제거는 하지 않음 - 같은 게시글이 여러 게시판에 있을 수 있음)
             all_articles.sort(key=lambda x: x.article_id)
             
-            self.log_info(f"전체 {len(all_articles)}개 게시글 조회 완료 (게시판 {len(menu_list)}개)")
             return all_articles
             
         except Exception as e:
@@ -243,7 +212,6 @@ class NaverCafeAPI(LoggedClass):
     async def get_article_content(self, cafe_id: str, article_id: str, retry_count: int = 0) -> Optional[tuple[str, datetime]]:
         """게시글 내용 조회 (재시도 로직 포함)"""
         try:
-            self.log_info(f"게시글 내용 조회 시작 (카페 ID: {cafe_id}, 게시글 ID: {article_id}, 재시도: {retry_count})")
             
             # 올바른 네이버 API 엔드포인트 사용
             url = f"https://article.cafe.naver.com/gw/v3/cafes/{cafe_id}/articles/{article_id}"
@@ -284,21 +252,9 @@ class NaverCafeAPI(LoggedClass):
                         # 새로운 API 응답 구조에 맞춰 수정
                         if 'result' in data and 'article' in data['result'] and 'contentHtml' in data['result']['article']:
                             content = data['result']['article']['contentHtml']
-                            self.log_info(f"게시글 내용 조회 성공 (길이: {len(content)}자)")
-                            
-                            # 추가 정보 로깅
-                            article_info = data['result']['article']
-                            self.log_info(f"게시글 제목: {article_info.get('subject', 'N/A')}")
-                            self.log_info(f"작성자: {article_info.get('writer', {}).get('nick', 'N/A')}")
-                            
-                            # 생성일 정보 로깅 및 변환
+                            # 생성일 정보 변환
                             write_date = article_info.get('writeDate')
                             created_at = self._convert_write_date(write_date)
-                            
-                            if created_at:
-                                self.log_info(f"게시글 생성일: {created_at}")
-                            else:
-                                self.log_info("게시글 생성일 정보 없음")
                             
                             # content와 created_at을 함께 반환 (튜플 형태)
                             return content, created_at
@@ -325,7 +281,6 @@ class NaverCafeAPI(LoggedClass):
     async def get_article_comments(self, cafe_id: str, article_id: str) -> List[Dict[str, Any]]:
         """게시글의 댓글 목록 조회"""
         try:
-            self.log_info(f"댓글 목록 조회 시작 (카페 ID: {cafe_id}, 게시글 ID: {article_id})")
             
             # 댓글 조회 API 엔드포인트 (게시글 내용 조회 시 함께 받아옴)
             # 실제로는 게시글 내용 조회 시 comments 정보가 함께 포함됨
@@ -400,7 +355,6 @@ class NaverCafeAPI(LoggedClass):
     async def get_articles_with_content(self, cafe_id: str, menu_id: str = "", per_page: int = 20) -> List[NaverCafeArticle]:
         """게시글 목록과 내용을 함께 조회 (개선된 버전)"""
         try:
-            self.log_info(f"게시글과 내용 조회 시작 (카페 ID: {cafe_id}, 메뉴 ID: {menu_id})")
             
             # 게시글 목록 조회
             articles = await self.get_article_list(cafe_id, menu_id, 1, per_page)

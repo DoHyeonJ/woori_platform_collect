@@ -25,7 +25,7 @@ class LoggerManager:
         
         # 로거 생성
         self.logger = logging.getLogger(self.name)
-        self.logger.setLevel(logging.DEBUG)
+        self.logger.setLevel(logging.INFO)
         
         # 기존 핸들러 제거 (중복 방지)
         for handler in self.logger.handlers[:]:
@@ -33,7 +33,7 @@ class LoggerManager:
         
         # 파일 핸들러 설정
         file_handler = logging.FileHandler(log_file, encoding='utf-8')
-        file_handler.setLevel(logging.DEBUG)
+        file_handler.setLevel(logging.INFO)
         
         # 콘솔 핸들러 설정
         console_handler = logging.StreamHandler()

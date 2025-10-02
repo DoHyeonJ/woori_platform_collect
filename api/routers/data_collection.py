@@ -462,7 +462,6 @@ async def collect_naver_data(
         cookies = request.cookies or ""
         
         # 로깅
-        logger.info(f"네이버 수집 시작 - 카페: {cafe_id}, 날짜: {target_date}, 게시판: {menu_id}, 제한: {limit}")
         
         # 수집기 생성
         collector = NaverDataCollector(cookies)

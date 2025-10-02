@@ -366,7 +366,6 @@ class GangnamUnniAPI(LoggedClass):
         Returns:
             List[Comment]: 댓글 목록
         """
-        self.log_info(f"        🔍 댓글 수집 시작: 게시글 ID {article_id}")
         
         # 게시글별 5초 딜레이 (과부하 방지)
         await asyncio.sleep(5)
@@ -375,10 +374,7 @@ class GangnamUnniAPI(LoggedClass):
             async with aiohttp.ClientSession(headers=self.headers) as session:
                 # 게시글 상세 페이지 URL
                 url = f"{self.base_url}/community/{article_id}"
-                self.log_info(f"        📡 페이지 URL: {url}")
-                
                 async with session.get(url) as response:
-                    self.log_info(f"        📊 HTTP 상태: {response.status}")
                     
                     if response.status == 404:
                         error_msg = f"404 Not Found: 게시글 ID {article_id}를 찾을 수 없습니다"
@@ -390,7 +386,6 @@ class GangnamUnniAPI(LoggedClass):
                         raise Exception(error_msg)
                     
                     html_content = await response.text()
-                    self.log_info(f"        📄 HTML 크기: {len(html_content)} bytes")
                     
                     # __NEXT_DATA__ 스크립트에서 댓글 데이터 추출
                     import re
@@ -406,22 +401,17 @@ class GangnamUnniAPI(LoggedClass):
                     
                     try:
                         next_data = json.loads(match.group(1))
-                        self.log_info(f"        ✅ __NEXT_DATA__ 파싱 성공")
-                        
                         # 댓글 데이터 추출
                         comments_data = next_data.get("props", {}).get("pageProps", {}).get("communityDocumentComments", [])
-                        self.log_info(f"        📋 원본 댓글 데이터: {len(comments_data)}개")
                         
                         comments = []
                         for i, comment_data in enumerate(comments_data):
                             try:
                                 comment = self._parse_comment_from_ssr(comment_data)
                                 comments.append(comment)
-                                self.log_info(f"        ✅ 댓글 {i+1} 파싱 성공: ID {comment.id}, 작성자 {comment.writer.nickname}")
                             except Exception as parse_error:
                                 self.log_warning(f"        ⚠️  댓글 {i+1} 파싱 실패: {parse_error}")
                         
-                        self.log_info(f"        🎉 총 {len(comments)}개 댓글 파싱 완료")
                         return comments
                         
                     except json.JSONDecodeError as e:
@@ -643,7 +633,6 @@ class GangnamUnniAPI(LoggedClass):
             replies = []
             replies_data = data.get("replies", [])
             if replies_data:
-                self.log_info(f"          🔄 대댓글 {len(replies_data)}개 파싱 중...")
                 for reply_data in replies_data:
                     reply = self._parse_comment_from_ssr(reply_data)
                     replies.append(reply)
@@ -707,7 +696,6 @@ class GangnamUnniAPI(LoggedClass):
             replies = []
             replies_data = data.get("replies", [])
             if replies_data:
-                self.log_info(f"          🔄 대댓글 {len(replies_data)}개 파싱 중...")
                 for reply_data in replies_data:
                     reply = self._parse_comment_from_api(reply_data)
                     replies.append(reply)
@@ -858,11 +846,9 @@ class GangnamUnniAPI(LoggedClass):
                 # 현재 페이지의 리뷰 가져오기
                 page_reviews = await self.get_reviews(page_index=page_index, page_size=20)
                 
-                self.log_info(f"📄 페이지 {page_index + 1}: {len(page_reviews)}개 리뷰 조회")
                 
                 if not page_reviews:
                     consecutive_empty_pages += 1
-                    self.log_info(f"📭 빈 페이지 {consecutive_empty_pages}회 연속")
                     page_index += 1
                     await asyncio.sleep(1)
                     continue
@@ -895,13 +881,9 @@ class GangnamUnniAPI(LoggedClass):
                 # 해당 날짜의 리뷰 추가
                 if target_date_reviews:
                     all_reviews.extend(target_date_reviews)
-                    self.log_info(f"✅ 페이지 {page_index + 1}: {len(target_date_reviews)}개 리뷰 추가 (총 {len(all_reviews)}개)")
-                else:
-                    self.log_info(f"📅 페이지 {page_index + 1}: 해당 날짜 리뷰 없음")
                 
                 # 더 오래된 리뷰가 발견되면 수집 중단
                 if older_reviews_found:
-                    self.log_info(f"🛑 더 오래된 리뷰 발견으로 수집 중단 (페이지 {page_index + 1})")
                     break
                 
                 # 페이지 간 딜레이 (서버 부하 방지)
@@ -928,7 +910,6 @@ class GangnamUnniAPI(LoggedClass):
                 page_index += 1
                 await asyncio.sleep(2)
         
-        self.log_info(f"🏁 리뷰 수집 완료: 총 {len(all_reviews)}개 (페이지 {page_index}개 처리)")
         return all_reviews
 
     async def get_review_detail(self, review_id: int) -> Optional[dict]:
@@ -1080,104 +1061,3 @@ class GangnamUnniAPI(LoggedClass):
         )
         
         return review
-
-# 테스트 함수
-async def test_gannamunni_api():
-    """강남언니 API 테스트 함수"""
-    from utils.logger import get_logger
-    logger = get_logger("GANNAMUNNI_TEST")
-    
-    logger.info("🧪 강남언니 API 테스트 시작")
-    logger.info("=" * 50)
-    
-    api = GangnamUnniAPI()
-    
-    try:
-        # 게시글 목록 테스트
-        logger.info("📝 게시글 목록 테스트")
-        articles = await api.get_article_list(category="hospital_question", page=1)
-        
-        logger.info(f"\n📊 게시글 목록 테스트 결과:")
-        logger.info(f"   수집된 게시글: {len(articles)}개")
-        
-        if articles:
-            logger.info(f"\n📝 첫 번째 게시글 상세 정보:")
-            first_article = articles[0]
-            logger.info(f"   ID: {first_article.id}")
-            logger.info(f"   작성자: {first_article.writer.nickname}")
-            logger.info(f"   카테고리: {first_article.category_name}")
-            logger.info(f"   조회수: {first_article.view_count}")
-            logger.info(f"   댓글 수: {first_article.comment_count}")
-            logger.info(f"   작성시간: {first_article.create_time}")
-            logger.info(f"   내용 미리보기: {first_article.contents[:100]}...")
-        
-        # 날짜별 게시글 테스트
-        logger.info(f"\n📅 날짜별 게시글 테스트")
-        from datetime import datetime
-        today = datetime.now().strftime("%Y-%m-%d")
-        logger.info(f"📅 오늘 날짜({today}) 게시글 수집 테스트")
-        
-        date_articles = await api.get_articles_by_date(today, category="hospital_question")
-        
-        logger.info(f"📊 날짜별 게시글 테스트 결과:")
-        logger.info(f"   수집된 게시글: {len(date_articles)}개")
-        
-        if date_articles:
-            logger.info(f"\n📝 첫 번째 날짜별 게시글 상세 정보:")
-            first_date_article = date_articles[0]
-            logger.info(f"   ID: {first_date_article.id}")
-            logger.info(f"   작성자: {first_date_article.writer.nickname}")
-            logger.info(f"   내용 미리보기: {first_date_article.contents[:100]}...")
-        
-        # 댓글 테스트 (게시글이 있는 경우에만)
-        if articles and articles[0].comment_count > 0:
-            logger.info(f"\n💬 댓글 테스트")
-            comments = await api.get_comments(articles[0].id)
-            
-            logger.info(f"📊 댓글 테스트 결과:")
-            logger.info(f"   수집된 댓글: {len(comments)}개")
-            
-            if comments:
-                logger.info(f"\n📝 첫 번째 댓글 상세 정보:")
-                first_comment = comments[0]
-                logger.info(f"   ID: {first_comment.id}")
-                logger.info(f"   작성자: {first_comment.writer.nickname}")
-                logger.info(f"   내용: {first_comment.contents}")
-                logger.info(f"   작성시간: {first_comment.create_time}")
-        
-    except Exception as e:
-        logger.error(f"❌ 테스트 중 오류 발생: {e}")
-        import traceback
-        logger.error(f"📋 상세 오류: {traceback.format_exc()}")
-    
-    logger.info("=" * 50)
-    logger.info("🧪 강남언니 API 테스트 완료")
-
-async def test_get_reviews():
-    from utils.logger import get_logger
-    logger = get_logger("GANNAMUNNI_TEST")
-    
-    logger.info("🧪 강남언니 API 테스트 시작")
-    logger.info("=" * 50)
-    
-    api = GangnamUnniAPI("ca06262d608b4ea3be4cc026454081cd")
-    
-    # get_reviews 함수 호출 테스트
-    logger.info(f"\n🧪 get_reviews 함수 호출 테스트")
-    try:
-        reviews = await api.get_reviews(page_index=100, page_size=20)
-        logger.info(f"📊 get_reviews 결과: {len(reviews)}개 리뷰 수집됨")
-        if reviews:
-            # print(reviews)
-            # logger.info(f"📝 첫 번째 리뷰 정보:")
-            first_review = reviews[0]
-            print(first_review)
-            pass
-            
-    except Exception as e:
-        logger.error(f"❌ get_reviews 테스트 중 오류 발생: {e}")
-
-
-if __name__ == "__main__":
-    asyncio.run(test_get_reviews())
-

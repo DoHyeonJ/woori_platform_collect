@@ -27,7 +27,6 @@ class BabitalkDataCollector(LoggedClass):
         Returns:
             int: 수집된 후기 수
         """
-        self.log_info("🚀 바비톡 시술 후기 수집 시작")
         
         # 바비톡 커뮤니티 생성 또는 조회
         babitalk_community = await self._get_or_create_babitalk_community()
@@ -68,11 +67,10 @@ class BabitalkDataCollector(LoggedClass):
                 # 페이지 간 딜레이 (서버 부하 방지)
                 await asyncio.sleep(1)
             
-            self.log_info(f"✅ 바비톡 시술 후기 수집 완료: {total_reviews}개")
             return total_reviews
             
         except Exception as e:
-            self.log_error(f"❌ 수집 중 오류 발생: {e}")
+            self.log_error(f"바비톡 후기 수집 실패: {e}")
             return total_reviews
     
     async def collect_reviews_by_date(self, target_date: str) -> int:
@@ -89,7 +87,6 @@ class BabitalkDataCollector(LoggedClass):
         start_time = time.time()
         last_progress_time = start_time
         
-        self.log_info(f"🚀 바비톡 시술후기 수집 시작 - {target_date}")
         
         # 바비톡 커뮤니티 생성 또는 조회
         babitalk_community = await self._get_or_create_babitalk_community()
@@ -99,10 +96,7 @@ class BabitalkDataCollector(LoggedClass):
             reviews = await self.api.get_reviews_by_date(target_date)
             
             if not reviews:
-                self.log_info(f"📭 {target_date} 날짜에 수집할 후기가 없습니다.")
                 return 0
-            
-            self.log_info(f"📋 {target_date} 날짜: {len(reviews)}개 후기 수집됨")
             
             # 각 후기 처리 및 저장
             total_reviews = 0
@@ -111,7 +105,6 @@ class BabitalkDataCollector(LoggedClass):
                     # 중복 체크: 이미 저장된 후기인지 확인
                     existing_review = self.db.get_review_by_platform_id_and_platform_review_id("babitalk", str(review.id))
                     if existing_review:
-                        self.log_info(f"⏭️  후기 {review.id}는 이미 저장되어 있습니다. 건너뜀")
                         continue
                     
                     # 후기 정보 저장
@@ -121,11 +114,10 @@ class BabitalkDataCollector(LoggedClass):
                 except Exception:
                     continue
             
-            self.log_info(f"✅ {target_date} 날짜 후기 수집 완료: {total_reviews}개")
             return total_reviews
             
         except Exception as e:
-            self.log_error(f"❌ 날짜별 후기 수집 중 오류 발생: {e}")
+            self.log_error(f"날짜별 후기 수집 실패: {e}")
             return 0
     
     async def collect_event_ask_memos_by_date(self, target_date: str, category_id: int) -> int:
@@ -140,7 +132,6 @@ class BabitalkDataCollector(LoggedClass):
             int: 수집된 발품후기 수
         """
         category_name = self.api.EVENT_ASK_CATEGORIES.get(category_id, f"카테고리{category_id}")
-        self.log_info(f"📅 {target_date} 날짜 바비톡 {category_name} 발품후기 수집 시작")
         
         # 바비톡 커뮤니티 생성 또는 조회
         babitalk_community = await self._get_or_create_babitalk_community()
@@ -150,7 +141,6 @@ class BabitalkDataCollector(LoggedClass):
             memos = await self.api.get_event_ask_memos_by_date(target_date, category_id)
             
             if not memos:
-                self.log_info(f"📭 {target_date} 날짜에 수집할 {category_name} 발품후기가 없습니다.")
                 return 0
             
             # 각 발품후기 처리 및 저장
@@ -160,7 +150,6 @@ class BabitalkDataCollector(LoggedClass):
                     # 중복 체크: 이미 저장된 발품후기인지 확인
                     existing_article = self.db.get_article_by_platform_id_and_community_article_id("babitalk_event_ask", str(memo.id))
                     if existing_article:
-                        self.log_info(f"⏭️  발품후기 {memo.id}는 이미 저장되어 있습니다. 건너뜀")
                         continue
                     
                     # 발품후기 정보 저장
@@ -170,11 +159,10 @@ class BabitalkDataCollector(LoggedClass):
                 except Exception:
                     continue
             
-            self.log_info(f"✅ {target_date} 날짜 {category_name} 발품후기 수집 완료: {total_memos}개")
             return total_memos
             
         except Exception as e:
-            self.log_error(f"❌ 날짜별 발품후기 수집 중 오류 발생: {e}")
+            self.log_error(f"날짜별 발품후기 수집 실패: {e}")
             return 0
     
     async def collect_all_event_ask_memos_by_date(self, target_date: str) -> Dict[int, int]:
@@ -187,7 +175,6 @@ class BabitalkDataCollector(LoggedClass):
         Returns:
             Dict[int, int]: 카테고리별 수집된 발품후기 수
         """
-        self.log_info(f"📅 {target_date} 날짜 바비톡 모든 카테고리 발품후기 수집 시작")
         
         results = {}
         
@@ -201,12 +188,11 @@ class BabitalkDataCollector(LoggedClass):
                 await asyncio.sleep(2)
                 
             except Exception as e:
-                self.log_error(f"❌ {category_name} 카테고리 수집 실패: {e}")
+                self.log_error(f"{category_name} 카테고리 수집 실패: {e}")
                 results[category_id] = 0
         
         # 전체 결과 요약
         total_memos = sum(results.values())
-        self.log_info(f"✅ 모든 카테고리 발품후기 수집 완료: {total_memos}개")
         
         return results
     
@@ -225,7 +211,6 @@ class BabitalkDataCollector(LoggedClass):
         start_time = time.time()
         last_progress_time = start_time
         
-        self.log_info(f"🚀 바비톡 자유톡 수집 시작 - {target_date} (서비스: {service_id})")
         
         # 바비톡 커뮤니티 생성 또는 조회
         babitalk_community = await self._get_or_create_babitalk_community()
@@ -235,7 +220,6 @@ class BabitalkDataCollector(LoggedClass):
             talks = await self.api.get_talks_by_date(target_date, service_id)
             
             if not talks:
-                self.log_info(f"📭 {target_date} 수집할 데이터 없음")
                 return 0
             
             # 각 자유톡 처리
@@ -267,8 +251,7 @@ class BabitalkDataCollector(LoggedClass):
                     
                     # 10분마다 진행상태 로그
                     current_time = time.time()
-                    if current_time - last_progress_time >= 600:  # 10분 = 600초
-                        self.log_info(f"📊 바비톡 수집 진행중... {talks.index(talk)+1}/{len(talks)} (자유톡: {total_talks}개, 댓글: {total_comments}개)")
+                    if current_time - last_progress_time >= 1800:  # 30분 = 1800초
                         last_progress_time = current_time
                             
                 except Exception as e:
@@ -277,12 +260,10 @@ class BabitalkDataCollector(LoggedClass):
             
             end_time = time.time()
             elapsed_time = end_time - start_time
-            self.log_info(f"✅ 바비톡 자유톡 수집 완료 - {target_date}")
-            self.log_info(f"📊 결과: 자유톡 {total_talks}개, 댓글 {total_comments}개 (소요시간: {elapsed_time:.2f}초)")
             return total_talks
             
         except Exception as e:
-            self.log_error(f"❌ 자유톡 수집 중 오류 발생: {e}")
+            self.log_error(f"자유톡 수집 실패: {e}")
             return 0
     
     async def collect_all_talks_by_date(self, target_date: str) -> Dict[int, int]:
@@ -295,7 +276,6 @@ class BabitalkDataCollector(LoggedClass):
         Returns:
             Dict[int, int]: 카테고리별 수집된 자유톡 수
         """
-        self.log_info(f"📅 {target_date} 날짜 바비톡 모든 자유톡 카테고리 수집 시작")
         
         results = {}
         
@@ -396,11 +376,11 @@ class BabitalkDataCollector(LoggedClass):
                     # 중복 체크: 이미 저장된 자유톡인지 확인
                     existing_article = self.db.get_article_by_platform_id_and_community_article_id("babitalk_talk", str(talk.id))
                     if not existing_article:
-                        print(f"⏭️  자유톡 {talk.id}는 데이터베이스에 없습니다. 댓글 수집 건너뜀")
+                        # print(f"⏭️  자유톡 {talk.id}는 데이터베이스에 없습니다. 댓글 수집 건너뜀")
                         continue
                     
                     # 이미 저장된 게시글이면 댓글도 이미 수집되었을 가능성이 높으므로 건너뜀
-                    print(f"⏭️  자유톡 {talk.id}는 이미 저장되어 있습니다. 댓글 수집 건너뜀")
+                    # print(f"⏭️  자유톡 {talk.id}는 이미 저장되어 있습니다. 댓글 수집 건너뜀")
                     continue
                     
                 except Exception as e:
@@ -620,7 +600,7 @@ class BabitalkDataCollector(LoggedClass):
                 # 중복 체크: 이미 저장된 댓글인지 확인
                 existing_comment = self.db.get_comment_by_article_id_and_comment_id(str(article_id), str(comment.id))
                 if existing_comment:
-                    print(f"        ⏭️  댓글 {comment.id}는 이미 저장되어 있습니다. 건너뜀")
+                    # print(f"        ⏭️  댓글 {comment.id}는 이미 저장되어 있습니다. 건너뜀")
                     continue
                 
                 # 날짜 파싱

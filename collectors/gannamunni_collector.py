@@ -28,7 +28,6 @@ class GangnamUnniDataCollector(LoggedClass):
         start_time = time.time()
         last_progress_time = start_time
         
-        self.log_info(f"🚀 강남언니 {category} 수집 시작 - {target_date}")
         
         # 강남언니 커뮤니티 생성 또는 조회
         gangnamunni_community = await self._get_or_create_gannamunni_community()
@@ -43,9 +42,6 @@ class GangnamUnniDataCollector(LoggedClass):
                 reviews = await self.api.get_reviews_by_date(target_date)
             
             if not articles and not reviews:
-                end_time = time.time()
-                elapsed_time = end_time - start_time
-                self.log_info(f"📭 {target_date} 수집할 데이터 없음 (소요시간: {elapsed_time:.2f}초)")
                 return {"articles": 0, "comments": 0, "reviews": 0}
             
             # 1. 리뷰 먼저 저장 (실제 리뷰 데이터만)
@@ -137,8 +133,6 @@ class GangnamUnniDataCollector(LoggedClass):
             elapsed_time = end_time - start_time
             
             # 수집 완료 로그
-            self.log_info(f"✅ 강남언니 {category} 수집 완료 - {target_date}")
-            self.log_info(f"📊 결과: 게시글 {total_articles}개, 댓글 {total_comments}개, 리뷰 {total_reviews}개 (소요시간: {elapsed_time:.2f}초)")
             
             return {"articles": total_articles, "comments": total_comments, "reviews": total_reviews}
             
@@ -238,7 +232,6 @@ class GangnamUnniDataCollector(LoggedClass):
         """
         import time
         start_time = time.time()
-        self.log_info(f"📅 {target_date} 날짜 강남언니 모든 카테고리 게시글 수집 시작...")
         
         categories = {
             "hospital_question": "병원질문",
