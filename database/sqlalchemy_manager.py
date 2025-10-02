@@ -590,7 +590,8 @@ class SQLAlchemyDatabaseManager:
     
     def search_data_by_keywords(self, keywords: List[str], platforms: List[str] = None, 
                                data_types: List[str] = None, start_date: str = None, 
-                               end_date: str = None, limit: int = 100, offset: int = 0) -> Dict[str, List[Dict]]:
+                               end_date: str = None, naver_cafes: List[str] = None, 
+                               limit: int = 100, offset: int = 0) -> Dict[str, List[Dict]]:
         """키워드로 게시글, 댓글, 후기를 검색합니다."""
         session = self.get_session()
         try:
@@ -623,6 +624,15 @@ class SQLAlchemyDatabaseManager:
                 if platforms:
                     article_query = article_query.filter(Article.platform_id.in_(platforms))
                 
+                # 네이버 카페 필터 (네이버 플랫폼인 경우에만 적용)
+                if naver_cafes and ('naver' in platforms if platforms else True):
+                    article_query = article_query.filter(
+                        or_(
+                            Article.platform_id != 'naver',
+                            Article.category_name.in_(naver_cafes)
+                        )
+                    )
+                
                 if start_date:
                     article_query = article_query.filter(func.date(Article.created_at) >= start_date)
                 
@@ -648,6 +658,16 @@ class SQLAlchemyDatabaseManager:
                 
                 if platforms:
                     comment_query = comment_query.filter(Comment.platform_id.in_(platforms))
+                
+                # 네이버 카페 필터 (댓글의 경우 게시글과 조인하여 필터링)
+                if naver_cafes and ('naver' in platforms if platforms else True):
+                    comment_query = comment_query.join(Article, Comment.community_article_id == Article.community_article_id)
+                    comment_query = comment_query.filter(
+                        or_(
+                            Comment.platform_id != 'naver',
+                            Article.category_name.in_(naver_cafes)
+                        )
+                    )
                 
                 if start_date:
                     comment_query = comment_query.filter(func.date(Comment.created_at) >= start_date)
@@ -687,6 +707,15 @@ class SQLAlchemyDatabaseManager:
                             platform_filters.append(platform)
                     review_query = review_query.filter(Review.platform_id.in_(platform_filters))
                 
+                # 네이버 카페 필터 (후기의 경우 categories 필드로 필터링)
+                if naver_cafes and ('naver' in platforms if platforms else True):
+                    review_query = review_query.filter(
+                        or_(
+                            Review.platform_id != 'naver',
+                            Review.categories.in_(naver_cafes)
+                        )
+                    )
+                
                 if start_date:
                     review_query = review_query.filter(func.date(Review.created_at) >= start_date)
                 
@@ -709,7 +738,7 @@ class SQLAlchemyDatabaseManager:
     
     def search_data_count_by_keywords(self, keywords: List[str], platforms: List[str] = None, 
                                      data_types: List[str] = None, start_date: str = None, 
-                                     end_date: str = None) -> Dict[str, int]:
+                                     end_date: str = None, naver_cafes: List[str] = None) -> Dict[str, int]:
         """키워드 검색 결과의 개수를 반환합니다."""
         session = self.get_session()
         try:
@@ -742,6 +771,15 @@ class SQLAlchemyDatabaseManager:
                 if platforms:
                     article_query = article_query.filter(Article.platform_id.in_(platforms))
                 
+                # 네이버 카페 필터 (네이버 플랫폼인 경우에만 적용)
+                if naver_cafes and ('naver' in platforms if platforms else True):
+                    article_query = article_query.filter(
+                        or_(
+                            Article.platform_id != 'naver',
+                            Article.category_name.in_(naver_cafes)
+                        )
+                    )
+                
                 if start_date:
                     article_query = article_query.filter(func.date(Article.created_at) >= start_date)
                 
@@ -766,6 +804,16 @@ class SQLAlchemyDatabaseManager:
                 
                 if platforms:
                     comment_query = comment_query.filter(Comment.platform_id.in_(platforms))
+                
+                # 네이버 카페 필터 (댓글의 경우 게시글과 조인하여 필터링)
+                if naver_cafes and ('naver' in platforms if platforms else True):
+                    comment_query = comment_query.join(Article, Comment.community_article_id == Article.community_article_id)
+                    comment_query = comment_query.filter(
+                        or_(
+                            Comment.platform_id != 'naver',
+                            Article.category_name.in_(naver_cafes)
+                        )
+                    )
                 
                 if start_date:
                     comment_query = comment_query.filter(func.date(Comment.created_at) >= start_date)
@@ -803,6 +851,15 @@ class SQLAlchemyDatabaseManager:
                         else:
                             platform_filters.append(platform)
                     review_query = review_query.filter(Review.platform_id.in_(platform_filters))
+                
+                # 네이버 카페 필터 (후기의 경우 categories 필드로 필터링)
+                if naver_cafes and ('naver' in platforms if platforms else True):
+                    review_query = review_query.filter(
+                        or_(
+                            Review.platform_id != 'naver',
+                            Review.categories.in_(naver_cafes)
+                        )
+                    )
                 
                 if start_date:
                     review_query = review_query.filter(func.date(Review.created_at) >= start_date)

@@ -56,9 +56,9 @@ class ArticleURLGenerator:
             elif platform_id == "babitalk":
                 return ArticleURLGenerator._generate_babitalk_review_url(community_article_id)
             elif platform_id == "babitalk_talk":
-                return ArticleURLGenerator._generate_babitalk_review_url(community_article_id)
-            elif platform_id == "babitalk_review":
                 return ArticleURLGenerator._generate_babitalk_talk_url(community_article_id)
+            elif platform_id == "babitalk_review":
+                return ArticleURLGenerator._generate_babitalk_review_url(community_article_id)
             elif platform_id == "babitalk_event_ask":
                 return ArticleURLGenerator._generate_babitalk_event_ask_url(community_article_id)
             elif platform_id == "naver":
