@@ -467,11 +467,11 @@ class GangnamUnniDataCollector(LoggedClass):
             from database.models import Review as DBReview
             
             # 리뷰 상세 정보 조회
-            self.log_info(f"🔍 리뷰 상세 정보 조회 중... (ID: {review.id})")
+            # self.log_info(f"🔍 리뷰 상세 정보 조회 중... (ID: {review.id})")
             review_detail = await self.api.get_review_detail(review.id)
             
             if not review_detail:
-                self.log_error(f"❌ 리뷰 상세 정보 조회 실패 (ID: {review.id})")
+                # self.log_error(f"❌ 리뷰 상세 정보 조회 실패 (ID: {review.id})")
                 return None
             
             # 날짜 파싱
@@ -564,7 +564,7 @@ class GangnamUnniDataCollector(LoggedClass):
             )
             
             review_id = self.db.insert_review(db_review)
-            self.log_info(f"✅ 리뷰 저장 완료 (ID: {review.id}, DB ID: {review_id})")
+            # self.log_info(f"✅ 리뷰 저장 완료 (ID: {review.id}, DB ID: {review_id})")
             return review_id
             
         except Exception as e:

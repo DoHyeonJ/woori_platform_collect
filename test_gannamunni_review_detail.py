@@ -25,7 +25,7 @@ async def test_review_detail_api():
     test_review_id = 102125020
     
     try:
-        print(f"📋 리뷰 상세 정보 조회 중... (ID: {test_review_id})")
+        # print(f"📋 리뷰 상세 정보 조회 중... (ID: {test_review_id})")
         review_detail = await api.get_review_detail(test_review_id)
         
         if review_detail:

@@ -157,11 +157,11 @@ class NaverDataCollector(LoggedClass):
                 all_articles_data = []
                 
                 for single_menu_id in menu_list:
-                    self.log_info(f"게시판 {single_menu_id} 조회 중...")
+                    # self.log_info(f"게시판 {single_menu_id} 조회 중...")
                     articles_data = await self.api.get_articles_with_content_and_comments(cafe_id, single_menu_id, per_page, target_date)
                     if articles_data:
                         all_articles_data.extend(articles_data)
-                        self.log_info(f"게시판 {single_menu_id}: {len(articles_data)}개 게시글 조회 완료")
+                        # self.log_info(f"게시판 {single_menu_id}: {len(articles_data)}개 게시글 조회 완료")
                 
                 articles_data = all_articles_data
             else:
@@ -251,11 +251,11 @@ class NaverDataCollector(LoggedClass):
                 all_articles = []
                 
                 for single_menu_id in menu_list:
-                    self.log_info(f"게시판 {single_menu_id} 조회 중...")
+                    # self.log_info(f"게시판 {single_menu_id} 조회 중...")
                     articles = await self.api.get_articles_with_content(cafe_id, single_menu_id, per_page)
                     if articles:
                         all_articles.extend(articles)
-                        self.log_info(f"게시판 {single_menu_id}: {len(articles)}개 게시글 조회 완료")
+                        # self.log_info(f"게시판 {single_menu_id}: {len(articles)}개 게시글 조회 완료")
                 
                 articles = all_articles
             else:
@@ -607,7 +607,7 @@ class NaverDataCollector(LoggedClass):
                     
                     if comment_id:
                         saved_count += 1
-                        self.log_info(f"댓글 {comment['comment_id']} 저장 완료 (DB ID: {comment_id})")
+                        # self.log_info(f"댓글 {comment['comment_id']} 저장 완료 (DB ID: {comment_id})")
                     else:
                         self.log_error(f"댓글 {comment['comment_id']} 저장 실패")
                         

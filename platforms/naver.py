@@ -121,11 +121,11 @@ class NaverCafeAPI(LoggedClass):
             
             async with aiohttp.ClientSession() as session:
                 async with session.get(url, params=params, headers=self.headers) as response:
-                    self.log_info(f"응답 상태 코드: {response.status}")
+                    # self.log_info(f"응답 상태 코드: {response.status}")
                     
                     if response.status == 200:
                         data = await response.json()
-                        self.log_info(f"응답 데이터 키: {list(data.keys()) if isinstance(data, dict) else 'Not a dict'}")
+                        # self.log_info(f"응답 데이터 키: {list(data.keys()) if isinstance(data, dict) else 'Not a dict'}")
                         
                         article_list = []
                         if 'message' in data and 'result' in data['message'] and 'articleList' in data['message']['result']:
@@ -228,12 +228,12 @@ class NaverCafeAPI(LoggedClass):
             
             async with aiohttp.ClientSession() as session:
                 async with session.get(url, params=params, headers=self.headers) as response:
-                    self.log_info(f"응답 상태 코드: {response.status}")
-                    self.log_info(f"응답 헤더: {dict(response.headers)}")
+                    # self.log_info(f"응답 상태 코드: {response.status}")
+                    # self.log_info(f"응답 헤더: {dict(response.headers)}")
                     
                     if response.status == 200:
                         data = await response.json()
-                        self.log_info(f"응답 데이터 키: {list(data.keys()) if isinstance(data, dict) else 'Not a dict'}")
+                        # self.log_info(f"응답 데이터 키: {list(data.keys()) if isinstance(data, dict) else 'Not a dict'}")
                         
                         # 시스템 에러 체크
                         if 'error_code' in data and data['error_code'] == '000':
@@ -253,7 +253,7 @@ class NaverCafeAPI(LoggedClass):
                         if 'result' in data and 'article' in data['result'] and 'contentHtml' in data['result']['article']:
                             content = data['result']['article']['contentHtml']
                             # 생성일 정보 변환
-                            write_date = article_info.get('writeDate')
+                            write_date = data['result']['article'].get('writeDate')
                             created_at = self._convert_write_date(write_date)
                             
                             # content와 created_at을 함께 반환 (튜플 형태)
@@ -268,8 +268,8 @@ class NaverCafeAPI(LoggedClass):
                             return None, None
                     else:
                         response_text = await response.text()
-                        self.log_error(f"게시글 내용 조회 실패: HTTP {response.status}")
-                        self.log_error(f"응답 내용: {response_text}")
+                        # self.log_error(f"게시글 내용 조회 실패: HTTP {response.status}")
+                        # self.log_error(f"응답 내용: {response_text}")
                         return None, None
                         
         except Exception as e:
@@ -297,7 +297,7 @@ class NaverCafeAPI(LoggedClass):
             
             async with aiohttp.ClientSession() as session:
                 async with session.get(url, params=params, headers=self.headers) as response:
-                    self.log_info(f"응답 상태 코드: {response.status}")
+                    # self.log_info(f"응답 상태 코드: {response.status}")
                     
                     if response.status == 200:
                         data = await response.json()
@@ -308,7 +308,7 @@ class NaverCafeAPI(LoggedClass):
                             
                             if 'items' in comments_data:
                                 comments = comments_data['items']
-                                self.log_info(f"댓글 {len(comments)}개 조회 완료")
+                                # self.log_info(f"댓글 {len(comments)}개 조회 완료")
                                 
                                 # 댓글 데이터 정리
                                 processed_comments = []
@@ -331,7 +331,7 @@ class NaverCafeAPI(LoggedClass):
                                     }
                                     processed_comments.append(processed_comment)
                                     
-                                    self.log_info(f"댓글 {processed_comment['comment_id']} 처리 완료: {processed_comment['writer_nickname']}")
+                                    # self.log_info(f"댓글 {processed_comment['comment_id']} 처리 완료: {processed_comment['writer_nickname']}")
                                 
                                 return processed_comments
                             else:
@@ -342,8 +342,8 @@ class NaverCafeAPI(LoggedClass):
                             return []
                     else:
                         response_text = await response.text()
-                        self.log_error(f"댓글 조회 실패: HTTP {response.status}")
-                        self.log_error(f"응답 내용: {response_text}")
+                        # self.log_error(f"댓글 조회 실패: HTTP {response.status}")
+                        # self.log_error(f"응답 내용: {response_text}")
                         return []
                         
         except Exception as e:
@@ -401,7 +401,7 @@ class NaverCafeAPI(LoggedClass):
                     articles_with_content.append(article)
                     continue
             
-            self.log_info(f"게시글과 내용 조회 완료: {len(articles_with_content)}개")
+            # self.log_info(f"게시글과 내용 조회 완료: {len(articles_with_content)}개")
             return articles_with_content
             
         except Exception as e:
@@ -450,7 +450,7 @@ class NaverCafeAPI(LoggedClass):
                     content_cnt += 1
                     continue
             
-            self.log_info(f"게시글 제목과 내용 조회 완료: {content_cnt-1}개")
+            # self.log_info(f"게시글 제목과 내용 조회 완료: {content_cnt-1}개")
             return result
             
         except Exception as e:
@@ -483,7 +483,7 @@ class NaverCafeAPI(LoggedClass):
                 self.log_warning("수집할 게시글이 없습니다")
                 return []
             
-            self.log_info(f"초기 게시글 {len(articles)}개 조회 완료")
+            # self.log_info(f"초기 게시글 {len(articles)}개 조회 완료")
             
             # 각 게시글의 내용과 댓글 조회 (생성일 정보 포함)
             articles_with_content_and_comments = []
@@ -518,7 +518,7 @@ class NaverCafeAPI(LoggedClass):
                     
                     # 댓글 조회
                     comments = await self.get_article_comments(cafe_id, article.article_id)
-                    self.log_info(f"게시글 {article.article_id} 댓글 {len(comments)}개 조회 완료")
+                    # self.log_info(f"게시글 {article.article_id} 댓글 {len(comments)}개 조회 완료")
                     
                     # 결과 데이터 구성
                     article_data = {
@@ -589,9 +589,9 @@ class NaverCafeAPI(LoggedClass):
             
             # per_page만큼만 처리
             articles_with_content_and_comments = articles_with_content_and_comments[:per_page]
-            self.log_info(f"최종 처리할 게시글 수: {len(articles_with_content_and_comments)}개")
+            # self.log_info(f"최종 처리할 게시글 수: {len(articles_with_content_and_comments)}개")
             
-            self.log_info(f"게시글과 내용, 댓글 조회 완료: {len(articles_with_content_and_comments)}개")
+            # self.log_info(f"게시글과 내용, 댓글 조회 완료: {len(articles_with_content_and_comments)}개")
             return articles_with_content_and_comments
             
         except Exception as e:
