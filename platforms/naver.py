@@ -292,8 +292,8 @@ class NaverCafeAPI(LoggedClass):
                 "requestFrom": "A"
             }
             
-            self.log_info(f"요청 URL: {url}")
-            self.log_info(f"요청 파라미터: {params}")
+            # self.log_info(f"요청 URL: {url}")
+            # self.log_info(f"요청 파라미터: {params}")
             
             async with aiohttp.ClientSession() as session:
                 async with session.get(url, params=params, headers=self.headers) as response:

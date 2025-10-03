@@ -576,7 +576,7 @@ class NaverDataCollector(LoggedClass):
                 return 0
             
             db_article_id = db_article['id']
-            self.log_info(f"게시글 {article_id}의 DB ID: {db_article_id}")
+            # self.log_info(f"게시글 {article_id}의 DB ID: {db_article_id}")
             
             for comment in comments:
                 try:
